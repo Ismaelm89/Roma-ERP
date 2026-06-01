@@ -454,9 +454,9 @@ class ManufacturingWagePaymentAdmin(StayOnPageMixin, LockAfterPostMixin, admin.M
     lock_field = 'status'
     lock_values = ('POSTED', 'CANCELLED')
     unlock_always = ('notes',)
-    list_display = ('payment_no', 'date', 'payee', 'method', 'cash_account',
+    list_display = ('payment_no', 'date', 'payee', 'expense_category', 'method', 'cash_account',
                     'amount', 'accrued_col', 'expense_col', 'status_col')
-    list_filter = ('status', 'method', 'date', 'cash_account')
+    list_filter = ('status', 'expense_category', 'method', 'date', 'cash_account')
     search_fields = ('payment_no', 'reference', 'payee')
     date_hierarchy = 'date'
     autocomplete_fields = ('cash_account',)
@@ -470,9 +470,10 @@ class ManufacturingWagePaymentAdmin(StayOnPageMixin, LockAfterPostMixin, admin.M
                            'الصرف بيخصم منه الأول؛ أي زيادة عن المستحق بتتسجّل «فرق مصنعيات» '
                            'في المصاريف. ولو دفعت أقل، الباقي يفضل مستحق في الميزانية.',
         }),
-        ('الدفع', {'fields': ('payee', 'method', 'cash_account', 'amount', 'reference'),
+        ('الدفع', {'fields': ('payee', 'expense_category', 'method', 'cash_account', 'amount', 'reference'),
                     'description': 'النقدية/البنك/المحفظة: اختار الحساب اللى دفعت منه. '
-                                   'سيبه فاضي عشان يستخدم الصندوق/البنك الافتراضي.'}),
+                                   'سيبه فاضي عشان يستخدم الصندوق/البنك الافتراضي. '
+                                   '«نوع المصروف» للتصنيف والتجميع بس — مش بيغيّر القيد المحاسبي.'}),
         ('التقسيم بعد الترحيل', {
             'fields': ('accrued_portion', 'expense_portion'),
             'description': 'بيتحسب تلقائياً وقت الترحيل.',

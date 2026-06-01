@@ -1337,6 +1337,11 @@ class ManufacturingWagePayment(models.Model):
     date = models.DateField('التاريخ')
     payee = models.CharField('المستفيد (اسم العامل/المشرف)', max_length=200, blank=True,
                               help_text='اختياري — اسم اللي استلم المصنعية')
+    expense_category = models.ForeignKey('core.ExpenseCategory', null=True, blank=True,
+                                         on_delete=models.SET_NULL, related_name='+',
+                                         verbose_name='نوع المصروف',
+                                         help_text='بند المصروف لتصنيف الصرف وتجميعه في القوائم والتقارير '
+                                                   '(للتصنيف فقط — مش بيغيّر القيد المحاسبي؛ الصرف بيترحّل زي ما هو).')
     amount = models.DecimalField('المبلغ', max_digits=14, decimal_places=2)
     method = models.CharField('طريقة الدفع', max_length=10, choices=METHOD_CHOICES, default='CASH')
     cash_account = models.ForeignKey('core.CashAccount', null=True, blank=True,
