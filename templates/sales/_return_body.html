@@ -1,0 +1,100 @@
+<div class="header-grid">
+    <div class="company-block">
+        {% if company.logo %}<img src="{{ company.logo.url }}" class="logo" alt="logo">{% endif %}
+        <h1>{{ company.name_ar|default:"Roma" }}</h1>
+        <div class="muted">{{ company.address }}</div>
+        {% if company.phone %}<div class="muted">هاتف: {{ company.phone }}</div>{% endif %}
+    </div>
+    <div class="meta-block">
+        <h1 style="color: #b71c1c;">إيصال مرتجع</h1>
+        <div><span class="label">رقم المرتجع:</span> <strong>{{ return_doc.return_no }}</strong></div>
+        <div><span class="label">التاريخ:</span> {{ return_doc.date|date:"d/m/Y" }}</div>
+        {% if return_doc.original_invoice %}
+        <div><span class="label">الفاتورة الأصلية:</span> {{ return_doc.original_invoice.invoice_no }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<h2>بيانات العميل</h2>
+<div class="party">
+    <div><strong>{{ return_doc.customer.name_ar }}</strong></div>
+    {% if return_doc.customer.phone %}<div class="muted">هاتف: {{ return_doc.customer.phone }}</div>{% endif %}
+    {% if return_doc.customer.address or return_doc.customer.governorate %}
+    <div class="muted">العنوان:
+        {% if return_doc.customer.address %}{{ return_doc.customer.address }}{% endif %}
+        {% if return_doc.customer.address and return_doc.customer.governorate %} — {% endif %}
+        {% if return_doc.customer.governorate %}{{ return_doc.customer.governorate }}{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if return_doc.reason %}
+<h2>سبب المرتجع</h2>
+<div class="party">{{ return_doc.reason }}</div>
+{% endif %}
+
+<h2>البنود المرتجعة</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>الكود</th>
+            <th>الصنف</th>
+            <th>الوحدة</th>
+            <th class="num">العدد</th>
+            <th class="num">سعر الوحدة</th>
+            <th class="num">الإجمالي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in return_doc.lines.all %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ line.item.code }}{% if line.variant %}-{{ line.variant.size }}{% endif %}</td>
+            <td>{{ line.item.name_ar }}</td>
+            <td>
+                {% if line.variant %}
+                    مقاس {{ line.variant.size }}
+                {% else %}
+                    دستة (كل المقاسات)
+                {% endif %}
+            </td>
+            <td class="num">{{ line.quantity }}</td>
+            <td class="num">{{ line.unit_price }}</td>
+            <td class="num">{{ line.line_total }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<table class="totals" style="width: 360px; margin-right: auto;">
+    <tr class="grand" style="color: #b71c1c;">
+        <td>إجمالي المُسترد ({{ company.currency_code|default:"EGP" }})</td>
+        <td class="num">{{ return_doc.grand_total }}</td>
+    </tr>
+</table>
+
+{% if return_doc.status == 'POSTED' %}
+<table class="totals" style="width: 480px; margin-right: auto; margin-top: 14px; background: #ebfbee; border-radius: 6px;">
+    <tr style="font-weight: 700;">
+        <td class="label" style="padding: 8px 10px;">الرصيد المتبقي على العميل بعد المرتجع</td>
+        <td class="num" style="padding: 8px 10px;">{{ return_doc.customer.current_balance|money:2 }} {{ company.currency_code|default:"EGP" }}</td>
+    </tr>
+</table>
+{% endif %}
+
+<div class="return-signatures">
+    <div class="sig-note">
+        تم استلام البضاعة المرتجعة في حالة جيدة وتم خصم قيمتها من رصيد العميل
+    </div>
+    <div class="sig-row-grid">
+        <div class="sig-cell">
+            <span class="sig-label">المستلم (Roma):</span>
+            <span class="sig-line">&nbsp;</span>
+        </div>
+        <div class="sig-cell">
+            <span class="sig-label">العميل ({{ return_doc.customer.name_ar }}):</span>
+            <span class="sig-line">&nbsp;</span>
+        </div>
+    </div>
+</div>

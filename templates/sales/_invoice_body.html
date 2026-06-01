@@ -1,0 +1,117 @@
+<div class="header-grid">
+    <div class="company-block">
+        {% if company.logo %}<img src="{{ company.logo.url }}" class="logo" alt="logo">{% endif %}
+        <h1>{{ company.name_ar|default:"Roma" }}</h1>
+        <div class="muted">{{ company.address }}</div>
+        {% if company.phone %}<div class="muted">هاتف: {{ company.phone }}</div>{% endif %}
+    </div>
+    <div class="meta-block">
+        <h1>فاتورة مبيعات</h1>
+        <div><span class="label">رقم الفاتورة:</span> <strong>{{ invoice.invoice_no }}</strong></div>
+        <div><span class="label">التاريخ:</span> {{ invoice.date|date:"d/m/Y" }}</div>
+    </div>
+</div>
+
+<h2>بيانات العميل</h2>
+<div class="party">
+    <div><strong>{{ invoice.customer.name_ar }}</strong></div>
+    {% if invoice.customer.tax_id %}<div class="muted">رقم ضريبي: {{ invoice.customer.tax_id }}</div>{% endif %}
+    {% if invoice.customer.commercial_register %}<div class="muted">سجل تجاري: {{ invoice.customer.commercial_register }}</div>{% endif %}
+    {% if invoice.customer.phone %}<div class="muted">هاتف: {{ invoice.customer.phone }}</div>{% endif %}
+    {% if invoice.customer.address or invoice.customer.governorate %}
+    <div class="muted">العنوان:
+        {% if invoice.customer.address %}{{ invoice.customer.address }}{% endif %}
+        {% if invoice.customer.address and invoice.customer.governorate %} — {% endif %}
+        {% if invoice.customer.governorate %}{{ invoice.customer.governorate }}{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<h2>البنود</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>الكود</th>
+            <th>الصنف</th>
+            <th>المقاس / الدستة</th>
+            <th class="num">عدد الدستات</th>
+            <th class="num">سعر الدستة</th>
+            <th class="num">الإجمالي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in invoice.lines.all %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ line.item.code }}{% if line.variant %}-{{ line.variant.size }}{% endif %}</td>
+            <td>{{ line.item.name_ar }}</td>
+            <td>
+                {% if line.variant %}مقاس {{ line.variant.size }}{% endif %}
+                <span class="muted">({{ line.dozen_size }} قطعة/دستة = {{ line.total_pieces|money:0 }} قطعة)</span>
+            </td>
+            <td class="num">{{ line.quantity }} دستة</td>
+            <td class="num">{{ line.unit_price|money:2 }}</td>
+            <td class="num">{{ line.line_total|money:2 }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<table class="totals" style="width: 360px; margin-right: auto;">
+    <tr><td class="label">الإجمالي</td><td class="num">{{ invoice.subtotal }}</td></tr>
+    {% if invoice.doc_discount_amount > 0 %}
+    <tr>
+        <td class="label">
+            خصم التاجر{% if invoice.doc_discount_percent > 0 %} ({{ invoice.doc_discount_percent }}%){% endif %}
+        </td>
+        <td class="num">{{ invoice.doc_discount_amount }}</td>
+    </tr>
+    {% endif %}
+    <tr class="grand"><td>الإجمالي النهائي ({{ company.currency_code|default:"EGP" }})</td><td class="num">{{ invoice.grand_total }}</td></tr>
+</table>
+
+{% if invoice.cash_payment_percent > 0 or invoice.installment_frequency %}
+<h2>شروط الدفع</h2>
+<table style="width: 480px; margin-right: auto;">
+    {% if invoice.cash_payment_percent > 0 %}
+    <tr>
+        <td class="label" style="padding: 6px 10px;">
+            دفعة كاش عند الاستلام ({{ invoice.cash_payment_percent }}%)
+        </td>
+        <td class="num" style="padding: 6px 10px;">
+            {{ invoice.cash_payment_amount|money:2 }} {{ company.currency_code|default:"EGP" }}
+        </td>
+    </tr>
+    <tr>
+        <td class="label" style="padding: 6px 10px;">
+            باقي المبلغ
+            {% if invoice.installment_frequency == 'WEEKLY' %}(يُسدد بدفعات أسبوعية){% endif %}
+            {% if invoice.installment_frequency == 'MONTHLY' %}(يُسدد بدفعات شهرية){% endif %}
+        </td>
+        <td class="num" style="padding: 6px 10px;">
+            {{ invoice.installments_amount|money:2 }} {{ company.currency_code|default:"EGP" }}
+        </td>
+    </tr>
+    {% endif %}
+</table>
+{% endif %}
+
+{% if invoice.status == 'POSTED' %}
+<table class="totals" style="width: 420px; margin-right: auto; margin-top: 14px; background: #fff8e1; border-radius: 6px;">
+    <tr style="font-weight: 700;">
+        <td class="label" style="padding: 8px 10px;">الرصيد الحالي للتاجر بعد هذه الفاتورة</td>
+        <td class="num" style="padding: 8px 10px;">{{ invoice.customer.current_balance|money:2 }} {{ company.currency_code|default:"EGP" }}</td>
+    </tr>
+</table>
+{% endif %}
+
+<div class="invoice-signatures">
+    <div class="sig-note">
+        البضاعة تعتبر بصفة أمانة لحين سداد الثمن بالكامل
+    </div>
+    <div class="sig-row">
+        <span class="sig-label">المستلم:</span>
+        <span class="sig-line">&nbsp;</span>
+    </div>
+</div>

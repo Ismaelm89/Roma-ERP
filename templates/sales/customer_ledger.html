@@ -1,0 +1,65 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}كشف حساب — {{ customer.name_ar }}{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>كشف حساب عميل</h1>
+        <div class="muted">حتى {{ today|date:"d/m/Y" }}</div>
+    </div>
+    <div class="meta-block">
+        <div><strong>{{ customer.name_ar }}</strong> ({{ customer.code }})</div>
+        {% if customer.tax_id %}<div class="muted">رقم ضريبي: {{ customer.tax_id }}</div>{% endif %}
+        {% if customer.phone %}<div class="muted">هاتف: {{ customer.phone }}</div>{% endif %}
+    </div>
+</div>
+
+<div style="display: flex; gap: 16px; margin-bottom: 16px;">
+    <div class="party" style="flex: 1;">
+        <div class="muted">الرصيد الافتتاحي</div>
+        <div style="font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;">{{ customer.opening_balance|money:2 }}</div>
+    </div>
+    <div class="party" style="flex: 1; {% if closing_balance > 0 %}background: #fff4f0;{% elif closing_balance < 0 %}background: #f0fff4;{% endif %}">
+        <div class="muted">الرصيد الحالي</div>
+        <div style="font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; {% if closing_balance > 0 %}color: #b00;{% elif closing_balance < 0 %}color: green;{% endif %}">
+            {{ closing_balance|money:2 }}
+        </div>
+        <div class="muted" style="font-size: 11px;">
+            {% if closing_balance > 0 %}مستحق على العميل{% elif closing_balance < 0 %}دفعة مقدمة لصالح العميل{% else %}الحساب مسوّى{% endif %}
+        </div>
+    </div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>التاريخ</th>
+            <th>المرجع</th>
+            <th>البيان</th>
+            <th class="num">مدين</th>
+            <th class="num">دائن</th>
+            <th class="num">الرصيد</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td>{% if row.date == "—" %}—{% else %}{{ row.date|date:"d/m/Y" }}{% endif %}</td>
+            <td>{{ row.reference }}</td>
+            <td>{{ row.description }}</td>
+            <td class="num">{{ row.debit }}</td>
+            <td class="num">{{ row.credit }}</td>
+            <td class="num">{{ row.balance }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">لا توجد حركات.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="5" style="text-align: left; font-weight: 700;">الرصيد الختامي</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ closing_balance }}</td>
+        </tr>
+    </tfoot>
+</table>
+{% endblock %}

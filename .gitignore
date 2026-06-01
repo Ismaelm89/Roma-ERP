@@ -1,0 +1,66 @@
+# --- Local dev / runtime ---
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3.backup-*
+*.sqlite3.backup-*
+server.log
+*.log
+
+# --- Secrets / environment ---
+.env
+.env.local
+
+# --- Static / media (uploaded files — keep server-side only) ---
+staticfiles/
+media/
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Backups ---
+deploy/backups/
+deploy/letsencrypt/
+deploy/certbot-www/
+
+# --- Smoke test temporary files ---
+_smoke_*.py
+_diag_*.py
+_check_*.py
+_apply_*.py
+_fix_*.py
+_cleanup_*.py
+_read_*.py
+_import_*.py
+
+# --- DB backups (timestamped snapshots) ---
+*.sqlite3.bak-*
+db.sqlite3.bak-*
+
+# --- Demo / walkthrough artifacts (generated locally, not part of the system) ---
+roma_walkthrough.html
+roma_walkthrough_demo.mp4
+_shots/
+_video/
+
+# --- Session scratch files/dirs ---
+_demo_*
+_build_*
+_record_*
+_verify_*
+_chk_*
+_wipe*.py
+_study/
+_workflows/
+# Any root-level underscore-prefixed scratch script (NOT subdir __init__.py — anchored to root)
+/_*.py

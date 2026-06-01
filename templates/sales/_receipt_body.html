@@ -1,0 +1,93 @@
+<div class="header-grid">
+    <div class="company-block">
+        {% if company.logo %}<img src="{{ company.logo.url }}" class="logo" alt="logo">{% endif %}
+        <h1>{{ company.name_ar|default:"Roma" }}</h1>
+        <div class="muted">{{ company.address }}</div>
+        {% if company.phone %}<div class="muted">هاتف: {{ company.phone }}</div>{% endif %}
+    </div>
+    <div class="meta-block">
+        <h1>إيصال سداد</h1>
+        <div><span class="label">رقم السند:</span> <strong>{{ receipt.receipt_no }}</strong></div>
+        <div><span class="label">التاريخ:</span> {{ receipt.date|date:"d/m/Y" }}</div>
+    </div>
+</div>
+
+<h2>استلمنا من السيد / السيدة</h2>
+<div class="party">
+    <div><strong>{{ receipt.customer.name_ar }}</strong></div>
+    {% if receipt.customer.phone %}<div class="muted">هاتف: {{ receipt.customer.phone }}</div>{% endif %}
+    {% if receipt.customer.address or receipt.customer.governorate %}
+    <div class="muted">العنوان:
+        {% if receipt.customer.address %}{{ receipt.customer.address }}{% endif %}
+        {% if receipt.customer.address and receipt.customer.governorate %} — {% endif %}
+        {% if receipt.customer.governorate %}{{ receipt.customer.governorate }}{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="amount-block">
+    <div class="amount-label">مبلغ وقدره</div>
+    <div class="amount-value">{{ receipt.amount|money:2 }} <span class="amount-currency">{{ company.currency_code|default:"EGP" }}</span></div>
+</div>
+
+<table style="width: 100%; margin-top: 10px;">
+    <tr>
+        <td class="label" style="width: 30%;">طريقة الدفع</td>
+        <td><strong>{{ receipt.get_method_display }}</strong></td>
+    </tr>
+    {% if receipt.reference %}
+    <tr>
+        <td class="label">المرجع</td>
+        <td>{{ receipt.reference }}</td>
+    </tr>
+    {% endif %}
+</table>
+
+{% if receipt.allocations.all %}
+<h2>تخصيص الدفعة على الفواتير</h2>
+<table>
+    <thead>
+        <tr>
+            <th>رقم الفاتورة</th>
+            <th>تاريخ الفاتورة</th>
+            <th class="num">إجمالي الفاتورة</th>
+            <th class="num">المخصص من هذا السند</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for alloc in receipt.allocations.all %}
+        <tr>
+            <td>{{ alloc.invoice.invoice_no }}</td>
+            <td>{{ alloc.invoice.date|date:"d/m/Y" }}</td>
+            <td class="num">{{ alloc.invoice.grand_total|money:2 }}</td>
+            <td class="num"><strong>{{ alloc.amount|money:2 }}</strong></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if receipt.status == 'POSTED' %}
+<table class="totals" style="width: 480px; margin-right: auto; margin-top: 14px; background: #ebfbee; border-radius: 6px;">
+    <tr style="font-weight: 700;">
+        <td class="label" style="padding: 8px 10px;">الرصيد المتبقي على العميل بعد هذا السداد</td>
+        <td class="num" style="padding: 8px 10px;">{{ receipt.customer.current_balance|money:2 }} {{ company.currency_code|default:"EGP" }}</td>
+    </tr>
+</table>
+{% endif %}
+
+<div class="receipt-signatures">
+    <div class="sig-note">
+        وذلك سداداً لقيمة الفواتير المذكورة أعلاه — هذا إيصال نهائي بالاستلام
+    </div>
+    <div class="sig-row-grid">
+        <div class="sig-cell">
+            <span class="sig-label">المستلم (Roma):</span>
+            <span class="sig-line">&nbsp;</span>
+        </div>
+        <div class="sig-cell">
+            <span class="sig-label">الدافع ({{ receipt.customer.name_ar }}):</span>
+            <span class="sig-line">&nbsp;</span>
+        </div>
+    </div>
+</div>

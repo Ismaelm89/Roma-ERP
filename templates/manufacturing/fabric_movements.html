@@ -1,0 +1,86 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}حركات القماش — {{ company.name_ar|default:"Roma" }}{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>حركات القماش</h1>
+        <div class="muted">سجل كل حركة كيلو على كل دفعة (شراء، تصبيغ، صرف، إهدار...)</div>
+    </div>
+    <div class="meta-block">
+        <div class="muted">إجمالي: {{ count }} حركة{% if capped %} (معروض أول 500){% endif %}</div>
+    </div>
+</div>
+
+<form method="get" class="no-print"
+      style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:8px 0 16px;
+             padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+    <div>
+        <label style="display:block;font-size:12px;color:#475569;">من تاريخ</label>
+        <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    </div>
+    <div>
+        <label style="display:block;font-size:12px;color:#475569;">إلى تاريخ</label>
+        <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    </div>
+    <div>
+        <label style="display:block;font-size:12px;color:#475569;">الدفعة</label>
+        <select name="batch">
+            <option value="">— كل الدفعات —</option>
+            {% for b in batches %}
+                <option value="{{ b.id }}" {% if batch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                    {{ b.batch_no }} — {{ b.fabric_type.name_ar }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label style="display:block;font-size:12px;color:#475569;">نوع الحركة</label>
+        <select name="type">
+            <option value="">— كل الأنواع —</option>
+            {% for code, label in type_options %}
+                <option value="{{ code }}" {% if mtype == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit">تصفية</button>
+    <a href="?" style="padding:6px 12px;">إلغاء الفلاتر</a>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>التاريخ</th>
+            <th>الدفعة</th>
+            <th>نوع القماش / اللون</th>
+            <th>نوع الحركة</th>
+            <th class="num">الكمية (كجم)</th>
+            <th class="num">تكلفة الكيلو وقت الحركة</th>
+            <th>ملاحظات</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for m in movements %}
+        <tr>
+            <td class="num">{{ m.date|date:"d/m/Y" }}</td>
+            <td><b>{{ m.batch.batch_no }}</b></td>
+            <td>{{ m.batch.fabric_type.name_ar }} / {{ m.batch.color.name_ar }}</td>
+            <td>
+                {% if m.movement_type == 'PURCHASE_IN' or m.movement_type == 'ADJUST_IN' %}
+                    <span style="color:#15803d;">↓ {{ m.get_movement_type_display }}</span>
+                {% else %}
+                    <span style="color:#dc2626;">↑ {{ m.get_movement_type_display }}</span>
+                {% endif %}
+            </td>
+            <td class="num">{{ m.quantity_kg|money:3 }}</td>
+            <td class="num">{{ m.cost_per_kg_snapshot|money:4 }}</td>
+            <td class="muted" style="font-size:11px;">{{ m.notes }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">
+            لا توجد حركات بالفلاتر المختارة.
+        </td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

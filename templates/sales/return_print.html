@@ -1,0 +1,72 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}{{ return_doc.customer.name_ar }} - {{ return_doc.return_no }}{% endblock %}
+
+{% block page_wrapper %}
+<style>
+.page.copy {
+    position: relative; overflow: hidden;
+    font-size: 12px; padding: 16px 22px;
+}
+.page.copy h1 { font-size: 16px; margin: 0 0 4px; }
+.page.copy h2 { font-size: 13px; margin: 10px 0 4px; padding-bottom: 4px; }
+.page.copy .header-grid { margin-bottom: 8px; padding-bottom: 6px; gap: 10px; }
+.page.copy .company-block .logo { max-height: 42px; }
+.page.copy .party { padding: 6px 10px; }
+.page.copy .party > div { margin: 1px 0; }
+.page.copy table th { padding: 4px 6px; font-size: 11px; }
+.page.copy table td { padding: 3px 6px; font-size: 11px; }
+.page.copy .totals td { padding: 2px 8px !important; }
+
+.page.copy::before {
+    content: attr(data-copy);
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    font-size: 240px;
+    font-weight: 800;
+    color: rgba(183, 28, 28, 0.18);  /* reddish for return */
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: 0.35em;
+    white-space: nowrap;
+    user-select: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.page.copy > * { position: relative; z-index: 1; }
+
+.return-signatures {
+    margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line);
+}
+.return-signatures .sig-note {
+    color: var(--muted); font-size: 12px; font-style: italic;
+    text-align: center; padding: 4px 0 18px;
+}
+.return-signatures .sig-row-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+}
+.return-signatures .sig-cell {
+    display: flex; align-items: baseline; gap: 8px;
+}
+.return-signatures .sig-label {
+    font-weight: 700; color: var(--brand); font-size: 13px; white-space: nowrap;
+}
+.return-signatures .sig-line {
+    flex: 1; border-bottom: 1px solid var(--ink); min-height: 24px;
+}
+
+@media print {
+    .page.copy { page-break-after: always; page-break-inside: avoid; }
+    .page.copy:last-child { page-break-after: auto; }
+    @page { size: A4 portrait; margin: 10mm; }
+    .page.copy::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+{% for copy_label in copies %}
+<div class="page copy" data-copy="{{ copy_label }}">
+    {% include "sales/_return_body.html" %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}تقييم المخزون{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>تقييم المخزون</h1>
+        <div class="muted">الكميات × متوسط التكلفة لكل صنف</div>
+    </div>
+    <div class="meta-block no-print">
+        <form method="get">
+            <label><input type="checkbox" name="show_zero" value="1" {% if show_zero %}checked{% endif %} onchange="this.form.submit()"> عرض الأصناف ذات الرصيد الصفري</label>
+        </form>
+    </div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>كود SKU</th>
+            <th>الموديل</th>
+            <th>المقاس</th>
+            <th class="num">الكمية</th>
+            <th class="num">متوسط التكلفة</th>
+            <th class="num">القيمة</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for v in rows %}
+        <tr>
+            <td>{{ v.sku_code }}</td>
+            <td>{{ v.item.code }} — {{ v.item.name_ar }}</td>
+            <td>{{ v.size }}</td>
+            <td class="num">{{ v.current_stock }}</td>
+            <td class="num">{{ v.average_cost }}</td>
+            <td class="num">{{ v.value|money:2 }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--muted);">لا توجد بيانات مخزون.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="3" style="font-weight: 700;">الإجمالي</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ total_qty }}</td>
+            <td></td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ total_value|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<table style="width: auto; min-width: 360px; margin-right: auto; margin-top: 20px;">
+    <tr><td class="label">رصيد حساب المخزون في الأستاذ العام</td><td class="num">{{ gl_balance|money:2 }}</td></tr>
+    <tr><td class="label">قيمة المخزون من الكميات الفعلية</td><td class="num">{{ total_value|money:2 }}</td></tr>
+    <tr style="font-weight: 700; {% if variance == 0 %}color: green;{% else %}color: #b00;{% endif %}">
+        <td>الفرق (يجب أن يكون صفر)</td>
+        <td class="num">{{ variance|money:2 }}</td>
+    </tr>
+</table>
+{% endblock %}

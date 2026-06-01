@@ -1,0 +1,86 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}7) الإقفال على رأس المال وجاري الشريك{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    دي آخر خطوة. بنقفل «حساب الأرصدة الافتتاحية» ونوزّع رصيده على:
+    <b>رأس المال المسجّل</b> (بالرقم اللي في السجل التجاري بالظبط) +
+    <b>جاري الشريك</b> (الباقي). لو الباقي طلع سالب معناه رأس المال المسجّل أكبر من
+    صافي الأصول المُدخلة، والفرق هيتسجّل مدين على جاري الشريك.
+</p>
+
+<table class="ob">
+    <tbody>
+        <tr>
+            <td class="lbl">صافي حساب الأرصدة الافتتاحية الحالي</td>
+            <td class="num" style="width:220px;">{{ s.obe_net|money }}</td>
+        </tr>
+    </tbody>
+</table>
+
+{% if s.obe_net == 0 and not s.finalized %}
+<p class="ob-msg warn-final">
+    لسه مفيش أرصدة افتتاحية متسجّلة (الصافي = صفر). ادخل الأرصدة الأول من الشاشات السابقة.
+</p>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الإقفال</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    <table class="ob">
+        <tbody>
+            <tr>
+                <td class="lbl">رأس المال المسجّل بالسجل التجاري</td>
+                <td class="num" style="width:220px;">
+                    <input type="number" step="0.01" min="0" id="cap-input"
+                           name="registered_capital" value="{{ prefill_cap }}" placeholder="0.00">
+                </td>
+            </tr>
+            <tr>
+                <td class="lbl">الباقي → جاري الشريك (تقديري)</td>
+                <td class="num" id="partner-preview" style="width:220px;">—</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn" type="submit">🔒 إقفال الأرصدة الافتتاحية</button>
+        <a class="btn secondary" href="{% url 'opening:hub' %}">رجوع للملخّص</a>
+    </div>
+</form>
+
+{% if s.finalized %}
+<h2>نتيجة الإقفال الحالية</h2>
+<table class="ob">
+    <tbody>
+        <tr><td class="lbl">رأس المال</td><td class="num" style="width:220px;">{{ s.capital_total|money }}</td></tr>
+        <tr><td class="lbl">جاري الشريك</td><td class="num">{{ s.partner_total|money }}</td></tr>
+    </tbody>
+</table>
+<p class="ob-hint">تم الإقفال بالفعل. أي تعديل في الأرصدة الافتتاحية بعد كده محتاج تعيد الحفظ هنا.</p>
+{% endif %}
+
+<script>
+(function () {
+    var obeNet = parseFloat("{{ s.obe_net|stringformat:'f' }}") || 0;
+    var fmt = function (n) {
+        return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var cap = document.getElementById('cap-input');
+    var out = document.getElementById('partner-preview');
+    var recalc = function () {
+        var c = parseFloat(cap.value) || 0;
+        var rem = obeNet - c;
+        out.textContent = fmt(rem) + (rem < 0 ? ' (مدين على جاري الشريك)' : '');
+    };
+    if (cap && out) {
+        cap.addEventListener('input', recalc);
+        recalc();
+    }
+})();
+</script>
+{% endblock %}

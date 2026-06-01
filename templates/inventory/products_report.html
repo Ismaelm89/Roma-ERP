@@ -1,0 +1,251 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}تقرير المنتجات{% endblock %}
+
+{% block page_wrapper %}
+<style>
+.page-wide {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: white;
+    padding: 28px 36px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--brand);
+}
+.report-header h1 { margin: 0; color: var(--brand); font-size: 22px; }
+.report-header .muted { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.summary-cell {
+    background: #f5f7fa;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+}
+.summary-cell .label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.summary-cell .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+}
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+.product-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow .15s;
+    page-break-inside: avoid;
+}
+.product-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+
+.product-image {
+    width: 100%;
+    aspect-ratio: 1 / 1.05;
+    background: #f5f7fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+}
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+.no-image {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+    line-height: 1.6;
+}
+.no-image .icon {
+    font-size: 42px;
+    display: block;
+    opacity: 0.5;
+    margin-bottom: 6px;
+}
+.product-card.inactive .product-image { opacity: 0.45; }
+
+.product-body {
+    padding: 12px 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.product-code {
+    font-weight: 800;
+    color: var(--brand);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+.product-name {
+    font-size: 12px;
+    color: var(--ink);
+    line-height: 1.4;
+    min-height: 34px;
+}
+.product-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    background: #fafafa;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 4px;
+}
+.product-stats .stat-label {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.product-stats .stat-value {
+    font-weight: 700;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+.product-sizes {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    margin-top: 4px;
+}
+.product-sizes .size-pill {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    text-align: center;
+    padding: 4px 2px;
+    font-size: 11px;
+    color: var(--brand);
+    font-weight: 600;
+}
+.product-sizes .size-pill .size-label {
+    display: block;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 600;
+}
+.product-sizes .size-pill.low { background: #fff0f0; border-color: #f5b5b5; }
+
+@media print {
+    body { background: white; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .page-wide { box-shadow: none; border: none; padding: 0; max-width: none; }
+    @page { size: A4 portrait; margin: 10mm; }
+    .products-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .product-card { font-size: 10px; }
+    .product-image { aspect-ratio: 1 / 1; }
+}
+</style>
+
+<div class="page-wide">
+    <div class="report-header">
+        <div>
+            <h1>تقرير المنتجات</h1>
+            <div class="muted">عرض كامل بالصور — {{ total_items }} منتج</div>
+        </div>
+        <form method="get" class="no-print" style="font-size: 12px;">
+            <label>
+                <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()">
+                إظهار المنتجات غير النشطة
+            </label>
+        </form>
+    </div>
+
+    <div class="summary-strip">
+        <div class="summary-cell">
+            <div class="label">عدد المنتجات</div>
+            <div class="value">{{ total_items }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي القطع</div>
+            <div class="value">{{ grand_pieces|money:0 }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي الدستات</div>
+            <div class="value">{{ grand_dozens|money:1 }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي قيمة المخزون (EGP)</div>
+            <div class="value">{{ grand_value|money:0 }}</div>
+        </div>
+    </div>
+
+    <div class="products-grid">
+    {% for row in rows %}
+        <div class="product-card{% if not row.item.active %} inactive{% endif %}">
+            <div class="product-image">
+                {% if row.item.image %}
+                    <img src="{{ row.item.image.url }}" alt="{{ row.item.name_ar }}">
+                {% else %}
+                    <div class="no-image">
+                        <span class="icon">📷</span>
+                        لا توجد صورة<br>
+                        <small>ارفعها من شاشة الصنف</small>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="product-body">
+                <div class="product-code">{{ row.item.code }}</div>
+                <div class="product-name">{{ row.item.name_ar }}</div>
+                <div class="product-stats">
+                    <div>
+                        <div class="stat-label">القطع المتاحة</div>
+                        <div class="stat-value">{{ row.total_pieces|money:0 }}</div>
+                    </div>
+                    <div>
+                        <div class="stat-label">الدستات المتاحة</div>
+                        <div class="stat-value">{{ row.total_dozens|money:1 }}</div>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <div class="stat-label">قيمة المخزون</div>
+                        <div class="stat-value">{{ row.total_value|money:0 }} EGP</div>
+                    </div>
+                </div>
+                <div class="product-sizes">
+                {% for v in row.variants %}
+                    <div class="size-pill{% if v.current_stock < 10 %} low{% endif %}">
+                        <span class="size-label">{{ v.size }}</span>
+                        {{ v.current_stock|money:0 }}
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div style="text-align: center; padding: 60px; color: var(--muted);">لا توجد منتجات.</div>
+    {% endfor %}
+    </div>
+</div>
+{% endblock %}

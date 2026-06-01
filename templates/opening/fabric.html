@@ -1,0 +1,118 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}4) الأرصدة الافتتاحية لمخزون الأقمشة{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    لكل دفعة قماش عندك أول المدة: اختار المورد ونوع القماش واللون، واكتب الكمية بالكيلو
+    وسعر الكيلو. القيمة = الكمية × السعر. سيب السطر فاضي لو مش محتاجه.
+    لو عايز سطور أكتر، احفظ الأول وهتلاقي سطور فاضية جديدة.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="row_count" value="{{ row_count }}">
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الرصيد الافتتاحي</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    {% if suppliers and ftypes and colors %}
+    <table class="ob" id="fab-table">
+        <thead>
+            <tr>
+                <th style="width:24%;">المورد</th>
+                <th style="width:22%;">نوع القماش</th>
+                <th style="width:18%;">اللون</th>
+                <th class="num" style="width:120px;">الكمية (كجم)</th>
+                <th class="num" style="width:120px;">سعر الكيلو</th>
+                <th class="num" style="width:120px;">القيمة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            {% with i=forloop.counter0 %}
+            <tr>
+                <td>
+                    <select name="supplier_{{ i }}">
+                        <option value="">—</option>
+                        {% for sup in suppliers %}
+                        <option value="{{ sup.id }}" {% if r.supplier_id == sup.id %}selected{% endif %}>{{ sup.name }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select name="ftype_{{ i }}">
+                        <option value="">—</option>
+                        {% for ft in ftypes %}
+                        <option value="{{ ft.id }}" {% if r.ftype_id == ft.id %}selected{% endif %}>{{ ft.name_ar }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select name="color_{{ i }}">
+                        <option value="">—</option>
+                        {% for cl in colors %}
+                        <option value="{{ cl.id }}" {% if r.color_id == cl.id %}selected{% endif %}>{{ cl.name_ar }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="num">
+                    <input type="number" step="0.001" min="0" name="qty_{{ i }}"
+                           value="{{ r.qty }}" placeholder="0" class="fab-qty">
+                </td>
+                <td class="num">
+                    <input type="number" step="0.01" min="0" name="cost_{{ i }}"
+                           value="{{ r.cost }}" placeholder="0.00" class="fab-cost">
+                </td>
+                <td class="num fab-value">—</td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="5">إجمالي قيمة الأقمشة الافتتاحية</td>
+                <td class="num" id="fab-total">0.00</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn" type="submit">💾 حفظ أرصدة الأقمشة</button>
+        <a class="btn secondary" href="{% url 'opening:assets' %}">التالي: الأصول ⟵</a>
+    </div>
+    {% else %}
+    <div class="empty">
+        لازم يكون عندك <b>موردين أقمشة</b> و<b>أنواع أقمشة</b> و<b>ألوان</b> الأول.
+        جهّزهم من
+        <a href="/admin/manufacturing/supplier/" target="_blank">الموردين</a> /
+        <a href="/admin/manufacturing/fabrictype/" target="_blank">أنواع الأقمشة</a> /
+        <a href="/admin/manufacturing/fabriccolor/" target="_blank">الألوان</a>
+        وبعدين ارجع هنا.
+    </div>
+    {% endif %}
+</form>
+
+<script>
+(function () {
+    var fmt = function (n) {
+        return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var recalc = function () {
+        var total = 0;
+        document.querySelectorAll('#fab-table tbody tr').forEach(function (tr) {
+            var q = parseFloat(tr.querySelector('.fab-qty').value) || 0;
+            var c = parseFloat(tr.querySelector('.fab-cost').value) || 0;
+            var v = q * c;
+            total += v;
+            tr.querySelector('.fab-value').textContent = v ? fmt(v) : '—';
+        });
+        var t = document.getElementById('fab-total');
+        if (t) t.textContent = fmt(total);
+    };
+    document.querySelectorAll('#fab-table .fab-qty, #fab-table .fab-cost')
+        .forEach(function (el) { el.addEventListener('input', recalc); });
+    recalc();
+})();
+</script>
+{% endblock %}

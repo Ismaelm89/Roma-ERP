@@ -1,0 +1,73 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}قائمة الأرباح والخسائر{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>قائمة الأرباح والخسائر</h1>
+        <div class="muted">من {{ date_from|date:"d/m/Y" }} إلى {{ date_to|date:"d/m/Y" }}</div>
+    </div>
+    <div class="meta-block no-print">
+        <form method="get">
+            <label>من: <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+            <label>إلى: <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+            <button class="btn" type="submit">عرض</button>
+        </form>
+    </div>
+</div>
+
+<h2>الإيرادات</h2>
+<table>
+    <thead>
+        <tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr>
+    </thead>
+    <tbody>
+    {% for r in revenue_rows %}
+        <tr>
+            <td>{{ r.account.code }}</td>
+            <td>{{ r.account.name_ar }}</td>
+            <td class="num">{{ r.amount|money:2 }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 12px;">لا توجد إيرادات.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="2" style="font-weight: 700;">إجمالي الإيرادات</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ revenue_total|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<h2>المصروفات</h2>
+<table>
+    <thead>
+        <tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr>
+    </thead>
+    <tbody>
+    {% for r in expense_rows %}
+        <tr>
+            <td>{{ r.account.code }}</td>
+            <td>{{ r.account.name_ar }}</td>
+            <td class="num">{{ r.amount|money:2 }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 12px;">لا توجد مصروفات.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="2" style="font-weight: 700;">إجمالي المصروفات</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ expense_total|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<table class="totals" style="width: 360px; margin-right: auto; margin-top: 20px;">
+    <tr class="grand" style="{% if net_income >= 0 %}color: green;{% else %}color: #b00;{% endif %}">
+        <td>{% if net_income >= 0 %}صافي الربح{% else %}صافي الخسارة{% endif %}</td>
+        <td class="num">{{ net_income|money:2 }}</td>
+    </tr>
+</table>
+{% endblock %}

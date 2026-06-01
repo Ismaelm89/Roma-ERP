@@ -1,0 +1,69 @@
+{% extends "sales/_base_print.html" %}
+{% comment %}
+Shared shell for every opening-balance screen.  Provides the step navigation,
+the Django messages strip, and screen-only styling for the data-entry forms.
+Each screen fills {% block ob %}.  Highlight the current step via context `active`.
+{% endcomment %}
+
+{% block title %}الأرصدة الافتتاحية — Roma ERP{% endblock %}
+
+{% block toolbar %}
+    <a class="btn secondary" href="/">⟵ لوحة التحكم</a>
+    <a class="btn" href="{% url 'opening:hub' %}">ملخّص الأرصدة الافتتاحية</a>
+{% endblock %}
+
+{% block content %}
+<style>
+.ob-nav { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 18px; }
+.ob-nav a {
+    text-decoration:none; font-size:13px; padding:7px 12px; border-radius:999px;
+    border:1px solid var(--line); color:var(--brand); background:white; font-weight:600;
+}
+.ob-nav a.active { background:var(--brand); color:white; border-color:var(--brand); }
+.ob-nav a .n { opacity:.55; margin-right:5px; font-size:11px; }
+.ob-msg { padding:10px 14px; border-radius:8px; margin:0 0 14px; font-weight:600; font-size:13px; }
+.ob-msg.success { background:#e8f5e9; color:#1b5e20; border:1px solid #a5d6a7; }
+.ob-msg.error   { background:#fdecea; color:#b71c1c; border:1px solid #f5c6cb; }
+.ob-hint { color:var(--muted); font-size:12px; margin:0 0 16px; line-height:1.8;
+           background:var(--soft); padding:10px 14px; border-radius:8px; }
+.ob-actions { margin-top:18px; display:flex; gap:10px; align-items:center; }
+.ob-date { margin-bottom:16px; }
+.ob-date label { font-size:13px; font-weight:600; margin-left:8px; }
+.ob-date input[type=date] {
+    padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+    font-family:inherit; font-size:13px;
+}
+table.ob input[type=number], table.ob input[type=text], table.ob select {
+    width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+    font-family:inherit; font-size:13px; box-sizing:border-box;
+}
+table.ob input[type=number] { text-align:left; font-variant-numeric:tabular-nums; }
+table.ob select { text-align:right; background:white; }
+table.ob td.lbl { font-weight:600; }
+table.ob td.code { color:var(--muted); font-size:12px; white-space:nowrap; }
+table.ob tfoot td { font-weight:700; border-top:2px solid var(--ink); background:var(--soft); }
+.empty { color:var(--muted); padding:28px; text-align:center; }
+.warn-final { background:#fff8e1; border:1px solid #ffe082; color:#7a5b00; }
+</style>
+
+<h1>{% block ob_title %}الأرصدة الافتتاحية{% endblock %}</h1>
+
+<div class="ob-nav no-print">
+    <a href="{% url 'opening:hub' %}"       {% if active == 'hub' %}class="active"{% endif %}>الملخّص</a>
+    <a href="{% url 'opening:customers' %}" {% if active == 'customers' %}class="active"{% endif %}><span class="n">1</span>العملاء</a>
+    <a href="{% url 'opening:suppliers' %}" {% if active == 'suppliers' %}class="active"{% endif %}><span class="n">2</span>الموردين</a>
+    <a href="{% url 'opening:inventory' %}" {% if active == 'inventory' %}class="active"{% endif %}><span class="n">3</span>المخزون</a>
+    <a href="{% url 'opening:fabric' %}"    {% if active == 'fabric' %}class="active"{% endif %}><span class="n">4</span>الأقمشة</a>
+    <a href="{% url 'opening:assets' %}"    {% if active == 'assets' %}class="active"{% endif %}><span class="n">5</span>الأصول</a>
+    <a href="{% url 'opening:cash' %}"      {% if active == 'cash' %}class="active"{% endif %}><span class="n">6</span>النقدية</a>
+    <a href="{% url 'opening:finalize' %}"  {% if active == 'finalize' %}class="active"{% endif %}><span class="n">7</span>الإقفال</a>
+</div>
+
+{% if messages %}
+    {% for m in messages %}
+    <div class="ob-msg {{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+{% endif %}
+
+{% block ob %}{% endblock %}
+{% endblock %}

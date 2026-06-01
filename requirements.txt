@@ -1,0 +1,8 @@
+Django>=5.1,<5.2
+Pillow>=10
+openpyxl>=3.1
+# --- Production-only dependencies ---
+gunicorn>=21.0       # WSGI server (used in Docker)
+psycopg[binary]>=3.1 # PostgreSQL driver
+dj-database-url>=2.1 # parse DATABASE_URL env var
+whitenoise>=6.6      # static-file serving (no separate nginx static config needed)

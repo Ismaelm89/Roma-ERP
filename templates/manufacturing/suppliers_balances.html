@@ -1,0 +1,67 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}أرصدة الموردين{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>أرصدة الموردين</h1>
+        <div class="muted">رصيد كل مورد محسوب live من القيود — مجمّعين حسب النوع</div>
+    </div>
+    <div class="meta-block">
+        <div class="muted">إجمالي ما إحنا مديّنين به:</div>
+        <div style="font-size: 22px; font-weight: 700;
+                    color: {% if grand_total > 0 %}#dc2626{% else %}#666{% endif %};">
+            {{ grand_total|money:2 }} جنيه
+        </div>
+    </div>
+</div>
+
+{% for g in groups %}
+    <h2 style="margin-top:16px;">{{ g.vendor_type.name_ar }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>الكود</th>
+                <th>الاسم</th>
+                <th>الهاتف</th>
+                <th class="num">الرصيد الحالي</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in g.rows %}
+            <tr>
+                <td>{{ row.v.code }}</td>
+                <td>{{ row.v.name }}</td>
+                <td>{{ row.v.phone|default:"—" }}</td>
+                <td class="num"
+                    style="font-weight:600;color:{% if row.balance > 0 %}#dc2626{% elif row.balance < 0 %}#16a34a{% else %}#666{% endif %};">
+                    {% if row.balance > 0 %}
+                        {{ row.balance|money:2 }}
+                    {% elif row.balance < 0 %}
+                        {{ row.balance|money:2 }} (دفع زيادة)
+                    {% else %}
+                        صفر
+                    {% endif %}
+                </td>
+                <td class="no-print"><a href="{{ row.ledger_url }}" target="_blank">كشف حساب</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="totals">
+                <td colspan="3" style="font-weight:700;">إجمالي {{ g.vendor_type.name_ar }}</td>
+                <td class="num" style="font-weight:700;border-top:2px solid var(--ink);
+                            color:{% if g.total > 0 %}#dc2626{% else %}#666{% endif %};">
+                    {{ g.total|money:2 }}
+                </td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+{% empty %}
+    <div style="text-align:center;color:var(--muted);padding:40px;">
+        لا يوجد موردين نشطين.
+    </div>
+{% endfor %}
+{% endblock %}

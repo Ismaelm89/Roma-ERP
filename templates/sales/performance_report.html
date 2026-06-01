@@ -1,0 +1,459 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}إجمالي الأداء — {{ date_from|date:"d-m-Y" }} إلى {{ date_to|date:"d-m-Y" }}{% endblock %}
+
+{% block page_wrapper %}
+<style>
+.perf-page {
+    max-width: 1280px;
+    margin: 0 auto 20px;
+    background: white;
+    padding: 24px 30px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.perf-section { margin-bottom: 22px; }
+.perf-section + .perf-section {
+    padding-top: 22px;
+    border-top: 3px double var(--brand);
+}
+.perf-section h1 {
+    color: var(--brand);
+    font-size: 22px;
+    margin: 0 0 4px;
+    border-bottom: 2px solid var(--brand);
+    padding-bottom: 8px;
+}
+.perf-section .sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.perf-section h2 { font-size: 16px; color: var(--brand); margin: 12px 0 6px; }
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.summary-strip.five { grid-template-columns: repeat(5, 1fr); }
+.summary-cell {
+    background: #f5f7fa; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; text-align: center;
+}
+.summary-cell .label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.summary-cell .value {
+    font-size: 18px; font-weight: 800; color: var(--brand);
+    font-variant-numeric: tabular-nums; margin-top: 4px;
+}
+.summary-cell.green .value { color: var(--green); }
+.summary-cell.amber .value { color: #d4a017; }
+
+/* Cover page */
+.cover {
+    text-align: center; padding: 80px 40px;
+    background: linear-gradient(135deg, var(--brand) 0%, #3d5277 100%);
+    color: white; border-radius: 12px; margin-bottom: 28px;
+    page-break-after: always;
+}
+.cover h1 { color: white; font-size: 36px; margin: 0 0 16px; border: none; padding: 0; }
+.cover .meta { font-size: 16px; opacity: 0.9; margin: 8px 0; }
+.cover .icon { font-size: 60px; margin-bottom: 12px; }
+
+/* Customer table */
+table.customers-tbl {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+}
+table.customers-tbl th {
+    background: var(--brand); color: white; padding: 7px 8px;
+    font-size: 10px; text-align: right;
+}
+table.customers-tbl td {
+    padding: 6px 8px; border-bottom: 1px solid var(--line);
+}
+table.customers-tbl tr:nth-child(even) td { background: #fafafa; }
+table.customers-tbl td.num { text-align: left; font-variant-numeric: tabular-nums; font-weight: 600; }
+table.customers-tbl td.muted { color: var(--muted); }
+table.customers-tbl td.bal-pos { color: var(--red); font-weight: 700; }
+table.customers-tbl td.bal-neg { color: var(--green); font-weight: 700; }
+table.customers-tbl tfoot td {
+    background: #fff8e1; font-weight: 800; border-top: 2px solid var(--brand);
+}
+
+/* Visual cards (sales + products) */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+.card-mini {
+    background: white; border: 1px solid var(--line); border-radius: 8px;
+    overflow: hidden; page-break-inside: avoid;
+    position: relative;
+}
+.card-mini .img-box {
+    width: 100%; aspect-ratio: 1 / 1; background: #f5f7fa;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; border-bottom: 1px solid var(--line);
+}
+.card-mini .img-box img { width: 100%; height: 100%; object-fit: contain; }
+.card-mini .no-img { color: var(--muted); font-size: 10px; text-align: center; }
+.card-mini .no-img .icon { font-size: 28px; display: block; opacity: 0.5; }
+.card-mini .body { padding: 8px 10px; }
+.card-mini .code {
+    font-weight: 800; color: var(--brand); font-size: 11px;
+    letter-spacing: 0.04em;
+}
+.card-mini .name { font-size: 10px; color: var(--ink); line-height: 1.3; min-height: 24px; }
+.card-mini .badge {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--brand); color: white; width: 22px; height: 22px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 10px;
+}
+.card-mini:nth-child(1) .badge { background: #d4a017; }
+.card-mini:nth-child(2) .badge { background: #888; }
+.card-mini:nth-child(3) .badge { background: #b87333; }
+
+.mini-revenue {
+    background: #ebfbee; border: 1px solid #2b8a3e; border-radius: 4px;
+    padding: 4px 6px; text-align: center; margin: 4px 0;
+}
+.mini-revenue .label { font-size: 9px; color: #1e5b2c; }
+.mini-revenue .value { font-size: 13px; font-weight: 800; color: var(--green); }
+
+.mini-stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    background: #fafafa; padding: 5px; border-radius: 4px; font-size: 10px;
+}
+.mini-stats .lbl { color: var(--muted); font-size: 8px; }
+.mini-stats .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.mini-stats .profit { color: var(--green); }
+
+/* Product card variant — size pills at bottom */
+.size-pills {
+    display: flex; gap: 2px; margin-top: 4px;
+}
+.size-pills .pill {
+    flex: 1; background: white; border: 1px solid var(--line); border-radius: 4px;
+    text-align: center; padding: 3px 1px; font-size: 9px; font-weight: 700;
+    color: var(--brand);
+}
+.size-pills .pill .s-lbl { display: block; color: var(--muted); font-size: 8px; }
+.size-pills .pill.low { background: #fff0f0; border-color: #f5b5b5; }
+
+/* P&L table */
+table.pnl-tbl {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+}
+table.pnl-tbl th { background: var(--soft); padding: 6px 8px; text-align: right; }
+table.pnl-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
+table.pnl-tbl td.num { text-align: left; font-variant-numeric: tabular-nums; }
+.pnl-total { font-weight: 800; }
+.pnl-net {
+    background: #fff8e1; padding: 10px 16px; margin-top: 14px;
+    border-radius: 8px; border: 2px solid #d4a017;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.pnl-net.profit { background: #ebfbee; border-color: #2b8a3e; color: var(--green); }
+.pnl-net.loss { background: #fff0f0; border-color: var(--red); color: var(--red); }
+.pnl-net .label { font-size: 16px; font-weight: 800; }
+.pnl-net .value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.date-form {
+    display: flex; gap: 8px; align-items: center; font-size: 12px;
+    margin: 0 0 12px;
+}
+.date-form input[type="date"] {
+    padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;
+    font-family: inherit;
+}
+.date-form button.btn {
+    background: var(--brand); color: white; border: 0;
+    padding: 6px 14px; cursor: pointer; border-radius: 6px; font-weight: 700;
+}
+
+@media print {
+    body { background: white; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .perf-page { box-shadow: none; border: none; padding: 0; max-width: none; margin: 0; }
+    .perf-section { page-break-before: always; }
+    .perf-section:first-child { page-break-before: auto; }
+
+    /* Portrait A4 for the whole document — readers don't auto-rotate landscape */
+    @page { size: A4 portrait; margin: 10mm; }
+
+    /* Cover compacted to fit portrait */
+    .cover { padding: 40px 24px; margin-bottom: 0; }
+    .cover h1 { font-size: 28px; }
+    .cover .meta { font-size: 14px; }
+    .cover .icon { font-size: 48px; }
+
+    /* Customer table — squeezed to fit portrait width */
+    table.customers-tbl { font-size: 8.5px; }
+    table.customers-tbl th { padding: 4px 4px; font-size: 8px; }
+    table.customers-tbl td { padding: 3px 4px; }
+
+    /* 3 cards per row in portrait */
+    .cards-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .card-mini { font-size: 9px; }
+    .card-mini .body { padding: 5px 6px; }
+
+    /* Section headings compact */
+    .perf-section h1 { font-size: 18px; }
+    .perf-section h2 { font-size: 13px; }
+    .summary-cell .value { font-size: 14px; }
+    .summary-cell .label { font-size: 9px; }
+}
+</style>
+
+<div class="perf-page">
+
+<!-- Cover -->
+<div class="cover">
+    <div class="icon">📊</div>
+    <h1>تقرير إجمالي الأداء</h1>
+    <div class="meta">من {{ date_from|date:"d/m/Y" }} إلى {{ date_to|date:"d/m/Y" }}</div>
+    <div class="meta">Roma ERP</div>
+    <div class="meta" style="font-size: 13px; margin-top: 24px; opacity: 0.7;">
+        4 تقارير في وثيقة واحدة: العملاء · المبيعات · المنتجات · الأرباح والخسائر
+    </div>
+</div>
+
+<form method="get" class="date-form no-print">
+    <label>من: <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+    <label>إلى: <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+    <button class="btn" type="submit">عرض</button>
+    <a href="javascript:window.print()" class="btn" style="background: var(--green); text-decoration: none; display: inline-block;">🖨️ طباعة الكل</a>
+</form>
+
+<!-- ============ Section 1: Customers ============ -->
+<div class="perf-section">
+    <h1>1. تقرير العملاء</h1>
+    <div class="sub">حركة كل عميل خلال الفترة — مبيعات · مدفوعات · رصيد</div>
+
+    <div class="summary-strip">
+        <div class="summary-cell">
+            <div class="label">عدد العملاء</div>
+            <div class="value">{{ c_total_customers }}</div>
+        </div>
+        <div class="summary-cell green">
+            <div class="label">إجمالي المبيعات</div>
+            <div class="value">{{ c_total_sales|money:0 }}</div>
+        </div>
+        <div class="summary-cell green">
+            <div class="label">إجمالي المدفوعات</div>
+            <div class="value">{{ c_total_payments|money:0 }}</div>
+        </div>
+        <div class="summary-cell amber">
+            <div class="label">إجمالي الرصيد</div>
+            <div class="value">{{ c_total_balance|money:0 }}</div>
+        </div>
+    </div>
+
+    <table class="customers-tbl">
+        <thead>
+            <tr>
+                <th>الكود</th><th>الاسم</th><th>العنوان</th><th>التليفون</th>
+                <th class="num">المبيعات</th><th>آخر فاتورة</th>
+                <th class="num">المدفوعات</th><th>آخر قبض</th>
+                <th class="num">الرصيد</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in customer_rows %}
+            <tr>
+                <td>{{ row.customer.code }}</td>
+                <td>{{ row.customer.name_ar }}</td>
+                <td {% if not row.address %}class="muted"{% endif %}>{{ row.address|default:"NA" }}</td>
+                <td {% if not row.phone %}class="muted"{% endif %}>{{ row.phone|default:"NA" }}</td>
+                <td class="num">{{ row.total_sales|money:2 }}</td>
+                <td {% if not row.last_sale %}class="muted"{% endif %}>
+                    {% if row.last_sale %}{{ row.last_sale|date:"d/m/Y" }}{% else %}NA{% endif %}
+                </td>
+                <td class="num">{{ row.total_payments|money:2 }}</td>
+                <td {% if not row.last_receipt %}class="muted"{% endif %}>
+                    {% if row.last_receipt %}{{ row.last_receipt|date:"d/m/Y" }}{% else %}NA{% endif %}
+                </td>
+                <td class="num {% if row.balance > 0 %}bal-pos{% elif row.balance < 0 %}bal-neg{% endif %}">{{ row.balance|money:2 }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" style="text-align: left;">الإجمالي</td>
+                <td class="num">{{ c_total_sales|money:2 }}</td>
+                <td></td>
+                <td class="num">{{ c_total_payments|money:2 }}</td>
+                <td></td>
+                <td class="num">{{ c_total_balance|money:2 }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<!-- ============ Section 2: Visual sales ============ -->
+<div class="perf-section">
+    <h1>2. تقرير المبيعات بالصور</h1>
+    <div class="sub">المنتجات مرتبة بالأعلى مبيعاً</div>
+
+    <div class="summary-strip five">
+        <div class="summary-cell">
+            <div class="label">منتجات تباع</div>
+            <div class="value">{{ s_total_items }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">دستة مباعة</div>
+            <div class="value">{{ s_total_dozens|money:1 }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">قطع</div>
+            <div class="value">{{ s_total_pieces|money:0 }}</div>
+        </div>
+        <div class="summary-cell green">
+            <div class="label">إجمالي المبيعات</div>
+            <div class="value">{{ s_total_revenue|money:0 }}</div>
+        </div>
+        <div class="summary-cell amber">
+            <div class="label">إجمالي الربح</div>
+            <div class="value">{{ s_total_profit|money:0 }}</div>
+        </div>
+    </div>
+
+    <div class="cards-grid">
+    {% for row in sales_rows %}
+        <div class="card-mini">
+            <div class="badge">{{ forloop.counter }}</div>
+            <div class="img-box">
+                {% if row.item.image %}
+                    <img src="{{ row.item.image.url }}" alt="">
+                {% else %}
+                    <div class="no-img"><span class="icon">📷</span>لا توجد صورة</div>
+                {% endif %}
+            </div>
+            <div class="body">
+                <div class="code">{{ row.item.code }}</div>
+                <div class="name">{{ row.item.name_ar|truncatechars:50 }}</div>
+                <div class="mini-revenue">
+                    <div class="label">المبيعات</div>
+                    <div class="value">{{ row.revenue|money:0 }}</div>
+                </div>
+                <div class="mini-stats">
+                    <div><div class="lbl">دستة</div><div class="val">{{ row.dozens_sold|money:1 }}</div></div>
+                    <div><div class="lbl">قطع</div><div class="val">{{ row.pieces_sold|money:0 }}</div></div>
+                    <div><div class="lbl">ربح</div><div class="val profit">{{ row.profit|money:0 }}</div></div>
+                    <div><div class="lbl">هامش %</div><div class="val">{{ row.margin_pct|money:1 }}%</div></div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--muted);">مفيش مبيعات في الفترة دي.</div>
+    {% endfor %}
+    </div>
+</div>
+
+<!-- ============ Section 3: Products snapshot ============ -->
+<div class="perf-section">
+    <h1>3. تقرير المنتجات (الجرد الحالي)</h1>
+    <div class="sub">حالة المخزون الحالية لكل منتج بالصور</div>
+
+    <div class="summary-strip">
+        <div class="summary-cell">
+            <div class="label">المنتجات</div>
+            <div class="value">{{ p_total_items }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي القطع</div>
+            <div class="value">{{ p_grand_pieces|money:0 }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي الدستات</div>
+            <div class="value">{{ p_grand_dozens|money:1 }}</div>
+        </div>
+        <div class="summary-cell amber">
+            <div class="label">قيمة المخزون</div>
+            <div class="value">{{ p_grand_value|money:0 }}</div>
+        </div>
+    </div>
+
+    <div class="cards-grid">
+    {% for row in product_rows %}
+        <div class="card-mini">
+            <div class="img-box">
+                {% if row.item.image %}
+                    <img src="{{ row.item.image.url }}" alt="">
+                {% else %}
+                    <div class="no-img"><span class="icon">📷</span>لا توجد صورة</div>
+                {% endif %}
+            </div>
+            <div class="body">
+                <div class="code">{{ row.item.code }}</div>
+                <div class="name">{{ row.item.name_ar|truncatechars:50 }}</div>
+                <div class="mini-stats">
+                    <div><div class="lbl">قطع</div><div class="val">{{ row.total_pieces|money:0 }}</div></div>
+                    <div><div class="lbl">دستة</div><div class="val">{{ row.total_dozens|money:1 }}</div></div>
+                    <div style="grid-column: 1/-1;"><div class="lbl">قيمة</div><div class="val">{{ row.total_value|money:0 }} EGP</div></div>
+                </div>
+                <div class="size-pills">
+                {% for v in row.variants %}
+                    <div class="pill{% if v.current_stock < 10 %} low{% endif %}">
+                        <span class="s-lbl">{{ v.size }}</span>{{ v.current_stock|money:0 }}
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</div>
+
+<!-- ============ Section 4: P&L ============ -->
+<div class="perf-section">
+    <h1>4. قائمة الأرباح والخسائر</h1>
+    <div class="sub">إيرادات ومصروفات الفترة</div>
+
+    <h2>الإيرادات</h2>
+    <table class="pnl-tbl">
+        <thead><tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr></thead>
+        <tbody>
+        {% for r in revenue_rows %}
+            <tr>
+                <td>{{ r.account.code }}</td>
+                <td>{{ r.account.name_ar }}</td>
+                <td class="num">{{ r.amount|money:2 }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 14px;">لا توجد إيرادات.</td></tr>
+        {% endfor %}
+            <tr class="pnl-total">
+                <td colspan="2" style="text-align: left;">إجمالي الإيرادات</td>
+                <td class="num">{{ pnl_rev_total|money:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>المصروفات</h2>
+    <table class="pnl-tbl">
+        <thead><tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr></thead>
+        <tbody>
+        {% for r in expense_rows %}
+            <tr>
+                <td>{{ r.account.code }}</td>
+                <td>{{ r.account.name_ar }}</td>
+                <td class="num">{{ r.amount|money:2 }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 14px;">لا توجد مصروفات.</td></tr>
+        {% endfor %}
+            <tr class="pnl-total">
+                <td colspan="2" style="text-align: left;">إجمالي المصروفات</td>
+                <td class="num">{{ pnl_exp_total|money:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="pnl-net {% if net_income >= 0 %}profit{% else %}loss{% endif %}">
+        <div class="label">{% if net_income >= 0 %}صافي الربح{% else %}صافي الخسارة{% endif %}</div>
+        <div class="value">{{ net_income|money:2 }}</div>
+    </div>
+</div>
+
+</div>
+{% endblock %}

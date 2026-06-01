@@ -1,0 +1,39 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block submit_buttons_bottom %}
+  {{ block.super }}
+  {% if show_post_button or show_cancel_button or print_url %}
+  <div class="submit-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 8px;">
+    {% if show_post_button %}
+      <input type="submit" value="✓ ترحيل الفاتورة" name="_post_invoice"
+             style="background: #2b8a3e; color: white; border: 0; padding: 10px 18px; cursor: pointer; font-weight: 700; border-radius: 6px;"
+             onclick="return confirm('متأكد من ترحيل هذه الفاتورة؟ سيتم خصم المخزون وإنشاء قيد محاسبي.');">
+    {% endif %}
+    {% if create_return_url %}
+      <a href="{{ create_return_url }}"
+         style="background: #d4a017; color: white; padding: 10px 18px; text-decoration: none; font-weight: 700; border-radius: 6px;"
+         onclick="return confirm('سيتم إنشاء مرتجع جديد مربوط بهذه الفاتورة. تختار في الصفحة التالية البنود اللي ترجعها (كلي أو جزئي).');">
+        📤 إنشاء مرتجع (جزئي أو كلي)
+      </a>
+    {% endif %}
+    {% if show_cancel_button %}
+      <input type="submit" value="✗ إلغاء الفاتورة كاملة (عكس القيد والمخزون)" name="_cancel_invoice"
+             style="background: #b71c1c; color: white; border: 0; padding: 10px 18px; cursor: pointer; font-weight: 700; border-radius: 6px;"
+             onclick="return confirm('متأكد من إلغاء هذه الفاتورة بالكامل؟ سيتم عكس القيد والمخزون. لو عايز ترجع جزء بس، استخدم زر &quot;إنشاء مرتجع&quot; بدل ده.');">
+    {% endif %}
+    {% if print_url_original %}
+      <a href="{{ print_url_original }}" target="_blank"
+         style="background: #2b3a55; color: white; padding: 10px 18px; text-decoration: none; font-weight: 700; border-radius: 6px;">
+        🖨️ طباعة الأصل
+      </a>
+    {% endif %}
+    {% if print_url_copy %}
+      <a href="{{ print_url_copy }}" target="_blank"
+         style="background: #555; color: white; padding: 10px 18px; text-decoration: none; font-weight: 700; border-radius: 6px;">
+        🖨️ طباعة الصورة
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}3) الأرصدة الافتتاحية للمخزون (منتجات تامة){% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    اكتب الكمية وتكلفة الوحدة (متوسط التكلفة) لكل صنف عند بداية النشاط.
+    القيمة = الكمية × التكلفة. سيب الكمية فاضية للأصناف اللي مفيش منها رصيد.
+    لازم تدخل الرصيد الافتتاحي قبل أي حركة مخزون فعلية على الصنف.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الرصيد الافتتاحي</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    {% if rows %}
+    <table class="ob" id="inv-table">
+        <thead>
+            <tr>
+                <th class="code">SKU</th>
+                <th>الصنف</th>
+                <th style="width:90px;">المقاس</th>
+                <th class="num" style="width:130px;">الكمية</th>
+                <th class="num" style="width:140px;">تكلفة الوحدة</th>
+                <th class="num" style="width:140px;">القيمة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td class="code">{{ r.v.sku_code }}</td>
+                <td class="lbl">{{ r.v.item.name_ar }}</td>
+                <td>{{ r.v.size }}</td>
+                <td class="num">
+                    <input type="number" step="0.001" min="0" name="qty_{{ r.v.id }}"
+                           value="{{ r.qty }}" placeholder="0" class="inv-qty">
+                </td>
+                <td class="num">
+                    <input type="number" step="0.01" min="0" name="cost_{{ r.v.id }}"
+                           value="{{ r.cost }}" placeholder="0.00" class="inv-cost">
+                </td>
+                <td class="num inv-value">—</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="5">إجمالي قيمة المخزون الافتتاحي</td>
+                <td class="num" id="inv-total">0.00</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn" type="submit">💾 حفظ أرصدة المخزون</button>
+        <a class="btn secondary" href="{% url 'opening:fabric' %}">التالي: الأقمشة ⟵</a>
+    </div>
+    {% else %}
+    <div class="empty">مفيش أصناف متسجّلة. ضيف الأصناف والمقاسات الأول من
+        <a href="/admin/inventory/item/add/" target="_blank">شاشة الأصناف</a> وبعدين ارجع هنا.</div>
+    {% endif %}
+</form>
+
+<script>
+(function () {
+    var fmt = function (n) {
+        return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var recalc = function () {
+        var total = 0;
+        document.querySelectorAll('#inv-table tbody tr').forEach(function (tr) {
+            var q = parseFloat(tr.querySelector('.inv-qty').value) || 0;
+            var c = parseFloat(tr.querySelector('.inv-cost').value) || 0;
+            var v = q * c;
+            total += v;
+            tr.querySelector('.inv-value').textContent = v ? fmt(v) : '—';
+        });
+        var t = document.getElementById('inv-total');
+        if (t) t.textContent = fmt(total);
+    };
+    document.querySelectorAll('#inv-table .inv-qty, #inv-table .inv-cost')
+        .forEach(function (el) { el.addEventListener('input', recalc); });
+    recalc();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}5) الأرصدة الافتتاحية للأصول الثابتة{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    اكتب كل أصل ثابت عندك أول المدة في سطر مستقل: اسم الأصل، الفئة، والقيمة الدفترية
+    (التكلفة بعد خصم الإهلاك المتراكم). كل أصل هيتسجّل في سجل الأصول الثابتة.
+    اضغط «➕ أضف أصل» لو محتاج سطور أكتر، وسيب السطر فاضي لو مش محتاجه.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="row_count" value="{{ row_count }}">
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الرصيد الافتتاحي</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    <table class="ob" id="asset-table">
+        <thead>
+            <tr>
+                <th>اسم الأصل</th>
+                <th style="width:220px;">الفئة</th>
+                <th class="num" style="width:200px;">القيمة الافتتاحية</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            {% with i=forloop.counter0 %}
+            <tr>
+                <td>
+                    <input type="text" name="name_{{ i }}" value="{{ r.name|default:'' }}"
+                           placeholder="مثال: ماكينة أوفر لوك">
+                </td>
+                <td>
+                    <select name="category_{{ i }}">
+                        {% for code, label in categories %}
+                        <option value="{{ code }}"
+                            {% if r.category == code %}selected{% elif not r.category and code == 'MACHINERY' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="num">
+                    <input type="number" step="0.01" min="0" name="cost_{{ i }}"
+                           value="{{ r.cost|default:'' }}" placeholder="0.00" class="asset-cost">
+                </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2">إجمالي قيمة الأصول الثابتة الافتتاحية</td>
+                <td class="num" id="asset-total">0.00</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn secondary" type="button" id="add-asset-row">➕ أضف أصل</button>
+        <button class="btn" type="submit">💾 حفظ أرصدة الأصول</button>
+        <a class="btn secondary" href="{% url 'opening:cash' %}">التالي: النقدية ⟵</a>
+    </div>
+</form>
+
+<script>
+(function () {
+    var table = document.getElementById('asset-table');
+    var tbody = table.querySelector('tbody');
+    var rowCountInput = document.querySelector('input[name="row_count"]');
+
+    var fmt = function (n) {
+        return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var recalc = function () {
+        var total = 0;
+        tbody.querySelectorAll('.asset-cost').forEach(function (el) {
+            total += parseFloat(el.value) || 0;
+        });
+        var t = document.getElementById('asset-total');
+        if (t) t.textContent = fmt(total);
+    };
+    var bindCost = function (el) { el.addEventListener('input', recalc); };
+    tbody.querySelectorAll('.asset-cost').forEach(bindCost);
+
+    var addRow = function () {
+        var idx = tbody.querySelectorAll('tr').length;  // next 0-based index
+        var tr = tbody.querySelector('tr:last-child').cloneNode(true);
+        tr.querySelectorAll('input, select').forEach(function (el) {
+            var nm = el.getAttribute('name') || '';
+            el.setAttribute('name', nm.replace(/_\d+$/, '_' + idx));
+            if (el.tagName === 'SELECT') { el.value = 'MACHINERY'; }
+            else { el.value = ''; }
+        });
+        tbody.appendChild(tr);
+        tr.querySelectorAll('.asset-cost').forEach(bindCost);
+        if (rowCountInput) rowCountInput.value = tbody.querySelectorAll('tr').length;
+    };
+    var btn = document.getElementById('add-asset-row');
+    if (btn) btn.addEventListener('click', addRow);
+
+    recalc();
+})();
+</script>
+{% endblock %}

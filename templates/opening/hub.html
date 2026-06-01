@@ -1,0 +1,84 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}الأرصدة الافتتاحية — الملخّص{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    سجّل أرصدة بداية النشاط خطوة بخطوة (العملاء، الموردين، المخزون، الأقمشة، الأصول، النقدية).
+    كل رصيد بيتسجّل في قيد طرفه التاني «حساب الأرصدة الافتتاحية»، وفي الآخر تيجي خطوة
+    «الإقفال» توزّع الرصيد على رأس المال المسجّل + جاري الشريك. تقدر ترجع تعدّل أي شاشة وتحفظ تاني في أي وقت.
+</p>
+
+<table class="ob">
+    <thead>
+        <tr>
+            <th>الخطوة</th>
+            <th>الحالة</th>
+            <th class="num">الإجمالي</th>
+            <th class="no-print"></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="lbl">1) أرصدة العملاء</td>
+            <td>{% if s.kinds.customers.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.customers.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:customers' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">2) أرصدة الموردين</td>
+            <td>{% if s.kinds.suppliers.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.suppliers.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:suppliers' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">3) المخزون (منتجات تامة)</td>
+            <td>{% if s.kinds.inventory.exists %}✅ مُسجّل{% else %}— لم يُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.inventory.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:inventory' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">4) مخزون الأقمشة</td>
+            <td>{% if s.kinds.fabric.exists %}✅ مُسجّل{% else %}— لم يُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.fabric.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:fabric' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">5) الأصول الثابتة</td>
+            <td>{% if s.kinds.assets.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.assets.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:assets' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">6) النقدية والبنوك والمحافظ</td>
+            <td>{% if s.kinds.cash.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.cash.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:cash' %}">فتح</a></td>
+        </tr>
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="2">صافي حساب الأرصدة الافتتاحية (المتبقّي للإقفال)</td>
+            <td class="num">{{ s.obe_net|money }}</td>
+            <td class="no-print"></td>
+        </tr>
+    </tfoot>
+</table>
+
+<h2>7) الإقفال على رأس المال وجاري الشريك</h2>
+{% if s.finalized %}
+<table class="ob">
+    <tbody>
+        <tr><td class="lbl">رأس المال المسجّل</td><td class="num">{{ s.capital_total|money }}</td></tr>
+        <tr><td class="lbl">جاري الشريك</td><td class="num">{{ s.partner_total|money }}</td></tr>
+    </tbody>
+</table>
+<p class="ob-hint">تم الإقفال. لو عدّلت أي رصيد افتتاحي بعد كده، افتح شاشة «الإقفال» واحفظ تاني عشان تتعاد القسمة.</p>
+{% else %}
+<p class="ob-hint">لسه ماتمّش الإقفال. بعد ما تخلّص إدخال الأرصدة، افتح شاشة «الإقفال».</p>
+{% endif %}
+
+<div class="ob-actions no-print">
+    <a class="btn" href="{% url 'opening:customers' %}">ابدأ بالعملاء ⟵</a>
+    <a class="btn secondary" href="{% url 'opening:finalize' %}">شاشة الإقفال</a>
+</div>
+{% endblock %}

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>أمر إنتاج {{ order.order_no }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --ink:#111; --muted:#666; --line:#9aa3b2; --soft:#eef2f7; --brand:#2b3a55; }
+* { box-sizing: border-box; }
+body {
+    font-family: 'Cairo','Segoe UI',Arial,sans-serif; direction: rtl; color: var(--ink);
+    margin: 0; padding: 14px; background: #fafafa; font-size: 12px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.toolbar { display:flex; gap:8px; justify-content:space-between; margin-bottom:12px; }
+.btn { background: var(--brand); color:#fff; border:0; padding:8px 16px; border-radius:6px;
+       cursor:pointer; font-family:inherit; font-size:13px; text-decoration:none; display:inline-block; }
+.btn.secondary { background:#fff; color:var(--brand); border:1px solid var(--brand); }
+.sheet { background:#fff; border:1px solid var(--line); padding:14px; }
+.head { display:flex; justify-content:space-between; align-items:flex-end;
+        border-bottom:2px solid var(--brand); padding-bottom:8px; margin-bottom:10px; }
+.head .company { font-size:20px; font-weight:700; color:var(--brand); }
+.head .doc { font-size:15px; font-weight:700; }
+h2 { font-size:13px; color:var(--brand); margin:14px 0 4px; }
+table { width:100%; border-collapse:collapse; }
+.info td { border:1px solid var(--line); padding:5px 8px; }
+.info .lbl { background:var(--soft); font-weight:700; white-space:nowrap; width:1%; }
+.kpis { display:flex; gap:10px; margin:8px 0 4px; }
+.kpi { flex:1; border:1px solid var(--line); border-radius:6px; padding:8px 10px; background:var(--soft); }
+.kpi .k { color:var(--muted); font-size:11px; }
+.kpi .v { font-size:17px; font-weight:700; color:var(--brand); }
+/* جدول المقاسات عريض جداً (مقاسات + 4 مناطق شغل) — table-layout:fixed + لف النص
+   يضمنوا إنه ميخرجش بره عرض الورقة (كان بيتقطع من على الشمال). */
+table.grid { font-size:9px; table-layout:fixed; width:100%;
+             word-break:break-word; overflow-wrap:anywhere; }
+table.grid th, table.grid td { border:1px solid var(--line); padding:2px 3px; text-align:center; }
+table.grid th { background:var(--soft); font-weight:700; }
+table.grid td.txt { text-align:right; }
+table.grid tfoot td { background:#f6f8fb; font-weight:700; }
+.std { font-size:11px; }
+.std th, .std td { border:1px solid var(--line); padding:5px 8px; text-align:right; }
+.std th { background:var(--soft); font-weight:700; }
+.std td.num { text-align:left; font-variant-numeric:tabular-nums; }
+.mk { font-weight:700; color:#15803d; }
+.muted { color:var(--muted); }
+/* خانات "الفعلي" اللي المشرفين بيملوها بخط إيدهم وقت تسليم الخطة. */
+.fill { background:#fff3bf !important; border:1px dashed #d9a400 !important; }
+.fill-cell { height:20px; }
+/* جدول مراحل الشغل: أعمدة المراحل ضيّقة، وعمود الملاحظات واسع زي ما هو. */
+.grp { table-layout:fixed; }
+.grp th, .grp td { padding:4px 4px; }
+.grp tbody td { height:26px; }
+.fill-note { background:#fff8e1; border:1px solid #f0d264; border-radius:6px;
+             padding:6px 10px; margin:6px 0; font-size:11px; color:#92600a; }
+.fill-note b { color:#7a4f00; }
+/* استهلاكات القماش + الإكسسوارات (عرض أصغر) جنبها صورة الموديل، قبل مجموعات الشغل. */
+.consume { display:flex; gap:12px; align-items:flex-start; }
+.consume-tables { flex:1 1 auto; min-width:0; }
+.consume-tables h2:first-child { margin-top:0; }
+.model-img { flex:0 0 30%; max-width:30%; }
+.model-img h2 { margin-top:0; }
+.model-img img { width:100%; max-height:300px; object-fit:contain;
+                 border:1px solid var(--line); border-radius:6px; padding:4px; background:#fff; }
+.no-img { border:1px dashed var(--line); border-radius:6px; padding:30px 8px;
+          text-align:center; color:var(--muted); }
+@media print {
+    /* الطباعة بقت "طولي" (Portrait) — مش عرضي — عشان سببين:
+       (1) إن الطابعة الافتراضية في ويندوز (و"Microsoft Print to PDF") بتطبع طولي،
+           فلما كنا نطلب عرضي كانت بتقلب المحتوى وتطلعه مايل (Rotate). دلوقتي طولي =
+           مفيش قلب خالص.
+       (2) الورقة الطولية أطول (≈287مم مقابل ≈200مم في العرضي)، فالمحتوى كله بيدخل
+           في صفحة واحدة بدل صفحتين.
+       جدول المقاسات مبني على table-layout:fixed وعرضه 100%، فبيتظبط على عرض الورقة
+       أيًّا كان من غير ما يخرج بره (بيلف النص بس). */
+    @page { size: A4 portrait; margin: 6mm; }
+    html, body { background:#fff; padding:0; font-size:9px; }
+    .toolbar, .no-print { display:none !important; }
+    .sheet { border:none; padding:0; }
+    .head { padding-bottom:4px; margin-bottom:5px; }
+    .head .company { font-size:15px; }
+    .head .doc { font-size:12px; }
+    h2 { margin:5px 0 2px; font-size:10.5px; }
+    .kpis { margin:4px 0 2px; gap:8px; }
+    .kpi { padding:3px 8px; }
+    .kpi .k { font-size:9px; }
+    .kpi .v { font-size:13px; }
+    .info td { padding:2px 5px; }
+    .info { font-size:9.5px; }
+    .std { font-size:8.5px; }
+    .std th, .std td { padding:2px 4px; }
+    /* جدول المقاسات: خط أصغر شوية وحشو ضيّق عشان الأعمدة الكتير (مقاسات + صدر/ظهر/كم/شورت)
+       تتظبط في عرض الورقة الطولية. */
+    table.grid { font-size:7px; }
+    table.grid th, table.grid td { padding:1px 1px; line-height:1.15; }
+    .grp th, .grp td { padding:2px 2px; }
+    .grp tbody td { height:17px; }
+    .fill-note { padding:3px 7px; margin:3px 0; font-size:9px; }
+    .consume { gap:8px; }
+    /* الصورة مقصوصة الارتفاع عشان تقعد جنب جداول القماش/الإكسسوار من غير ما تزوّد طول الصفحة. */
+    .model-img img { max-height:120px; }
+    /* الصفوف متتقسمش على صفحتين، لكن الجدول نفسه يكمل عادي. */
+    tr { page-break-inside:avoid; }
+    thead { display:table-header-group; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+    <a class="btn" href="javascript:window.print()">🖨️ طباعة / حفظ PDF</a>
+    <a class="btn secondary" href="javascript:window.close()">إغلاق</a>
+</div>
+
+<div class="sheet">
+
+    <div class="head">
+        <div class="company">{{ company.name_ar|default:"روما للملابس" }}</div>
+        <div class="doc">ورقة أمر إنتاج {% if plan_stage %}— خطة{% endif %}</div>
+    </div>
+
+    {% if plan_stage %}
+    <div class="fill-note">
+        ✍️ صفوف <b>مجموعات ومراحل الشغل</b> الفاضية يملاها مشرفو الإنتاج بخط اليد.
+        القماش والإكسسوارات محسوبين <b>تلقائياً</b> من وصفة المنتج — مفيش إدخال يدوي.
+    </div>
+    {% endif %}
+
+    {# ---------- بيانات الأمر ---------- #}
+    <table class="info">
+        <tr>
+            <td class="lbl">رقم الأمر</td><td><b>{{ order.order_no }}</b></td>
+            <td class="lbl">التاريخ</td><td>{{ order.date|date:"d/m/Y" }}</td>
+            <td class="lbl">العميل</td><td>{% if order.customer %}{{ order.customer.name_ar }}{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+            <td class="lbl">اسم الموديل</td><td>{{ order.title }}</td>
+            <td class="lbl">المنتج الفرعي</td>
+            <td colspan="3">{% if order.item %}<b>{{ order.item.code }}</b> — {{ order.item.name_ar }}{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+            <td class="lbl">نوع القماش</td>
+            <td>{% if order.main_product.fabric_type %}{{ order.main_product.fabric_type.name_ar }}{% else %}—{% endif %}</td>
+            <td class="lbl">لون القماش</td>
+            <td colspan="3">{% if order.fabric_color %}<b>{{ order.fabric_color.name_ar }}</b>{% else %}كل الألوان (مفيش لون محدّد للموديل){% endif %}</td>
+        </tr>
+    </table>
+
+    {# ---------- إجمالي الإنتاج ---------- #}
+    <div class="kpis">
+        <div class="kpi"><div class="k">عدد القطع (إجمالي الإنتاج)</div><div class="v">{{ order.total_pieces }} قطعة</div></div>
+        <div class="kpi"><div class="k">القماش (قبل الهالك)</div><div class="v">{{ fabric_total_before|money:3 }} كجم</div></div>
+    </div>
+
+    {# ---------- جدول المقاسات + بيانات القص ---------- #}
+    <h2>المقاسات وبيانات القص</h2>
+    {% if matrix_rows %}
+    <table class="grid">
+        {# نِسَب الأعمدة — table-layout:fixed بيعيد توزيعها لتملأ عرض الورقة بالظبط. #}
+        <colgroup>
+            <col style="width:3%;">
+            {% for sh in size_headers %}<col style="width:3.5%;">{% endfor %}
+            {% for area in "1234" %}<col style="width:2.5%;"><col style="width:2.5%;"><col style="width:4.5%;"><col style="width:6%;">{% endfor %}
+            <col style="width:6%;"><col style="width:4%;"><col style="width:7%;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th rowspan="2">#</th>
+                <th colspan="{{ size_count }}">المقاسات</th>
+                <th colspan="4">صدر</th>
+                <th colspan="4">ظهر</th>
+                <th colspan="4">كم</th>
+                <th colspan="4">شورت</th>
+                <th rowspan="2">اللياقة</th>
+                <th rowspan="2">التيكت</th>
+                <th rowspan="2">الملاحظات</th>
+            </tr>
+            <tr>
+                {% for sh in size_headers %}<th>{{ sh.code }}</th>{% endfor %}
+                {# صدر / ظهر / كم / شورت — كل واحد: طباعة ميكس / سادة / اللون / ملاحظات #}
+                <th>طباعة<br>ميكس</th><th>سادة</th><th>اللون</th><th>ملاحظات</th>
+                <th>طباعة<br>ميكس</th><th>سادة</th><th>اللون</th><th>ملاحظات</th>
+                <th>طباعة<br>ميكس</th><th>سادة</th><th>اللون</th><th>ملاحظات</th>
+                <th>طباعة<br>ميكس</th><th>سادة</th><th>اللون</th><th>ملاحظات</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in matrix_rows %}
+            <tr>
+                <td><b>{{ row.no }}</b></td>
+                {% for c in row.cells %}<td>{{ c }}</td>{% endfor %}
+                {# صدر #}
+                <td>{% if row.notes.chest_type == 'طباعة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td>{% if row.notes.chest_type == 'سادة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td class="txt">{{ row.notes.chest_color }}</td>
+                <td class="txt">{{ row.notes.chest_notes }}</td>
+                {# ظهر #}
+                <td>{% if row.notes.back_type == 'طباعة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td>{% if row.notes.back_type == 'سادة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td class="txt">{{ row.notes.back_color }}</td>
+                <td class="txt">{{ row.notes.back_notes }}</td>
+                {# كم #}
+                <td>{% if row.notes.sleeve_type == 'طباعة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td>{% if row.notes.sleeve_type == 'سادة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td class="txt">{{ row.notes.sleeve_color }}</td>
+                <td class="txt">{{ row.notes.sleeve_notes }}</td>
+                {# شورت #}
+                <td>{% if row.notes.shorts_type == 'طباعة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td>{% if row.notes.shorts_type == 'سادة' %}<span class="mk">✔</span>{% endif %}</td>
+                <td class="txt">{{ row.notes.shorts_color }}</td>
+                <td class="txt">{{ row.notes.shorts_pattern }}{% if row.notes.shorts_pattern and row.notes.shorts_notes %} · {% endif %}{{ row.notes.shorts_notes }}</td>
+                {# اللياقة / التيكت / الملاحظات #}
+                <td class="txt">{{ row.notes.fabric_description }}</td>
+                <td class="txt">{{ row.notes.ticket }}</td>
+                <td class="txt">{{ row.notes.notes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>الإجمالي</td>
+                {% for sh in size_headers %}<td>{{ sh.total }}</td>{% endfor %}
+                <td colspan="19">إجمالي القطع: {{ grand_total }}</td>
+            </tr>
+        </tfoot>
+    </table>
+    {% else %}
+    <p class="muted">لا توجد كميات مقاسات مسجلة.</p>
+    {% endif %}
+
+    {# ---------- استهلاكات القماش + الإكسسوارات (عرض أصغر) + صورة الموديل ---------- #}
+    {# الجدولين جنب بعض بعرض أصغر، وصورة الموديل جنبهم — قبل مجموعات الشغل. #}
+    <div class="consume">
+        <div class="consume-tables">
+            <h2>استهلاكات القماش</h2>
+            {% if fabric_rows %}
+            <table class="std">
+                <thead>
+                    <tr>
+                        <th style="width:36%;">الخامة / الدفعة</th>
+                        <th style="width:16%;">اللون</th>
+                        <th class="num" style="width:22%;">الكمية قبل الهالك (كجم)</th>
+                        <th>ملاحظات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for fr in fabric_rows %}
+                    <tr>
+                        <td>{% if fr.name %}<b>{{ fr.name }}</b>{% endif %}
+                            {% if fr.batch %} — دفعة {{ fr.batch.batch_no }}{% endif %}</td>
+                        <td>{% if fr.color %}<b>{{ fr.color }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
+                        <td class="num">{{ fr.qty_before|money:3 }}</td>
+                        <td class="muted">{{ fr.notes }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th>الإجمالي</th>
+                        <th></th>
+                        <th class="num">{{ fabric_total_before|money:3 }}</th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+            {% else %}
+            <p class="muted">لا توجد استهلاكات قماش مسجلة.</p>
+            {% endif %}
+
+            <h2>استهلاكات الإكسسوارات</h2>
+            {% if accessory_rows %}
+            <table class="std">
+                <thead>
+                    <tr>
+                        <th style="width:55%;">الإكسسوار</th>
+                        <th style="width:20%;">الوحدة</th>
+                        <th class="num">الكمية (تلقائي من الوصفة)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for a in accessory_rows %}
+                    <tr>
+                        <td>{{ a.name }}</td>
+                        <td>{{ a.unit }}</td>
+                        <td class="num"><b>{{ a.qty|money:3 }}</b></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="muted">لا توجد إكسسوارات مسجلة.</p>
+            {% endif %}
+        </div>
+        <div class="model-img">
+            <h2>صورة الموديل</h2>
+            {% if order.item.image %}
+                <img src="{{ order.item.image.url }}" alt="{{ order.item.name_ar }}">
+            {% else %}
+                <div class="no-img">لا توجد صورة للموديل</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------- مجموعات ومراحل الشغل (تشغيل / تشطيب / جودة / كوي) ---------- #}
+    {# 5 صفوف على الأقل: المملوء + الباقي فاضي يملاه المشرفون بخط اليد. #}
+    <h2>مجموعات ومراحل الشغل</h2>
+    <table class="std grp">
+        <colgroup>
+            <col style="width:4%;">
+            <col style="width:9%;"><col style="width:5%;">
+            <col style="width:9%;"><col style="width:5%;">
+            <col style="width:9%;"><col style="width:5%;">
+            <col style="width:9%;"><col style="width:5%;">
+            <col style="width:40%;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th rowspan="2">#</th>
+                <th colspan="2">التشغيل</th>
+                <th colspan="2">التشطيب</th>
+                <th colspan="2">الجودة</th>
+                <th colspan="2">الكوي</th>
+                <th rowspan="2">ملاحظات</th>
+            </tr>
+            <tr>
+                <th>المجموعة</th><th class="num">كمية</th>
+                <th>المجموعة</th><th class="num">كمية</th>
+                <th>المجموعة</th><th class="num">كمية</th>
+                <th>المجموعة</th><th class="num">كمية</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for g in group_rows %}
+            <tr>
+                <td><b>{{ forloop.counter }}</b></td>
+                <td>{{ g.sewing_group }}</td>
+                <td class="num">{{ g.sewing_qty }}</td>
+                <td>{{ g.finishing_group }}</td>
+                <td class="num">{{ g.finishing_qty }}</td>
+                <td>{{ g.quality_group }}</td>
+                <td class="num">{{ g.quality_qty }}</td>
+                <td>{{ g.ironing_group }}</td>
+                <td class="num">{{ g.ironing_qty }}</td>
+                <td class="muted">{{ g.notes }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th>الإجمالي</th>
+                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.0.match %}color:#b91c1c;{% endif %}">{{ stage_totals.0.total }}</th>
+                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.1.match %}color:#b91c1c;{% endif %}">{{ stage_totals.1.total }}</th>
+                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.2.match %}color:#b91c1c;{% endif %}">{{ stage_totals.2.total }}</th>
+                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.3.match %}color:#b91c1c;{% endif %}">{{ stage_totals.3.total }}</th>
+                <th>إجمالي القطع = {{ grand_total }}</th>
+            </tr>
+        </tfoot>
+    </table>
+    <p class="muted" style="font-size:11px;">كل مرحلة المفروض مجموع كمياتها = إجمالي القطع ({{ grand_total }}). أي رقم بالأحمر معناه مش مطابق.</p>
+
+</div>
+</body>
+</html>

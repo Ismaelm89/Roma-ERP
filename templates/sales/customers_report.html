@@ -1,0 +1,189 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}تقرير العملاء{% endblock %}
+
+{% block page_wrapper %}
+<style>
+.page-wide {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: white;
+    padding: 24px 30px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--brand);
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.report-header h1 { margin: 0; color: var(--brand); font-size: 22px; }
+.report-header .muted { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.summary-cell {
+    background: #f5f7fa;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+}
+.summary-cell .label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.summary-cell .value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+}
+.summary-cell.sales .value { color: var(--green); }
+.summary-cell.payments .value { color: #2b8a3e; }
+.summary-cell.balance .value { color: #b08800; }
+
+table.customers {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+table.customers th {
+    background: var(--brand);
+    color: white;
+    padding: 8px 10px;
+    font-weight: 600;
+    font-size: 11px;
+    text-align: right;
+    letter-spacing: 0.02em;
+}
+table.customers td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+table.customers tr:nth-child(even) td { background: #fafafa; }
+table.customers td.num {
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+table.customers td.muted { color: var(--muted); }
+table.customers td.balance-pos { color: var(--red); font-weight: 700; }
+table.customers td.balance-neg { color: var(--green); font-weight: 700; }
+table.customers tfoot td {
+    background: #fff8e1;
+    font-weight: 800;
+    border-top: 2px solid var(--brand);
+    border-bottom: none;
+    padding: 10px;
+}
+.cust-code {
+    background: var(--brand);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+@media print {
+    body { background: white; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .page-wide { box-shadow: none; border: none; padding: 0; max-width: none; }
+    @page { size: A4 portrait; margin: 8mm; }
+    table.customers { font-size: 9px; }
+    table.customers th { padding: 3px 4px; font-size: 8px; }
+    table.customers td { padding: 3px 4px; }
+}
+</style>
+
+<div class="page-wide">
+    <div class="report-header">
+        <div>
+            <h1>تقرير العملاء</h1>
+            <div class="muted">حركة كل عميل: مبيعات / مدفوعات / رصيد — {{ total_customers }} عميل</div>
+        </div>
+        <form method="get" class="no-print" style="font-size: 12px;">
+            <label>
+                <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()">
+                إظهار العملاء غير النشطين
+            </label>
+        </form>
+    </div>
+
+    <div class="summary-strip">
+        <div class="summary-cell">
+            <div class="label">عدد العملاء</div>
+            <div class="value">{{ total_customers }}</div>
+        </div>
+        <div class="summary-cell sales">
+            <div class="label">إجمالي المبيعات (EGP)</div>
+            <div class="value">{{ total_sales|money:0 }}</div>
+        </div>
+        <div class="summary-cell payments">
+            <div class="label">إجمالي المدفوعات (EGP)</div>
+            <div class="value">{{ total_payments|money:0 }}</div>
+        </div>
+        <div class="summary-cell balance">
+            <div class="label">إجمالي الرصيد المتبقي (EGP)</div>
+            <div class="value">{{ total_balance|money:0 }}</div>
+        </div>
+    </div>
+
+    <table class="customers">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>اسم العميل</th>
+                <th>العنوان</th>
+                <th>رقم التليفون</th>
+                <th class="num">إجمالي المبيعات</th>
+                <th>تاريخ آخر فاتورة</th>
+                <th class="num">إجمالي المدفوعات</th>
+                <th>تاريخ آخر سند قبض</th>
+                <th class="num">الرصيد النهائي</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+            <tr>
+                <td><span class="cust-code">{{ row.customer.code }}</span></td>
+                <td>{{ row.customer.name_ar }}</td>
+                <td {% if not row.address %}class="muted"{% endif %}>{{ row.address|default:"NA" }}</td>
+                <td {% if not row.phone %}class="muted"{% endif %}>{{ row.phone|default:"NA" }}</td>
+                <td class="num">{{ row.total_sales|money:2 }}</td>
+                <td {% if not row.last_sale %}class="muted"{% endif %}>
+                    {% if row.last_sale %}{{ row.last_sale|date:"d/m/Y" }}{% else %}NA{% endif %}
+                </td>
+                <td class="num">{{ row.total_payments|money:2 }}</td>
+                <td {% if not row.last_receipt %}class="muted"{% endif %}>
+                    {% if row.last_receipt %}{{ row.last_receipt|date:"d/m/Y" }}{% else %}NA{% endif %}
+                </td>
+                <td class="num {% if row.balance > 0 %}balance-pos{% elif row.balance < 0 %}balance-neg{% endif %}">{{ row.balance|money:2 }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--muted);">لا يوجد عملاء.</td></tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" style="text-align: left;">الإجمالي</td>
+                <td class="num">{{ total_sales|money:2 }}</td>
+                <td></td>
+                <td class="num">{{ total_payments|money:2 }}</td>
+                <td></td>
+                <td class="num">{{ total_balance|money:2 }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endblock %}

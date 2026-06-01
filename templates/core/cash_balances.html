@@ -1,0 +1,68 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}أرصدة النقدية والبنوك والمحافظ{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>أرصدة النقدية والبنوك والمحافظ</h1>
+        <div class="muted">رصيد كل خزينة/بنك/محفظة محسوب live من القيود حتى {{ as_of|date:"d/m/Y" }}</div>
+    </div>
+    <div class="meta-block">
+        <div class="muted">الإجمالي{% if type_filter and groups %} ({{ groups.0.label }}){% endif %}:</div>
+        <div style="font-size:22px;font-weight:700;
+                    color:{% if grand_total > 0 %}#16a34a{% elif grand_total < 0 %}#dc2626{% else %}#666{% endif %};">
+            {{ grand_total|money:2 }} جنيه
+        </div>
+    </div>
+</div>
+
+<div class="no-print" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+    {% for t in tabs %}
+        <a href="?{% if t.key %}type={{ t.key }}{% endif %}"
+           style="padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;
+                  {% if type_filter == t.key %}background:var(--brand);color:#fff;{% else %}background:var(--soft);color:var(--brand);border:1px solid var(--line);{% endif %}">
+            {{ t.label }}
+        </a>
+    {% endfor %}
+</div>
+
+{% for g in groups %}
+    <h2>{{ g.label }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>اسم الحساب</th>
+                <th>البنك / المزود</th>
+                <th>رقم الحساب</th>
+                <th class="num">الرصيد الحالي</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in g.rows %}
+            <tr>
+                <td>{{ row.ca.name }}{% if row.ca.is_default %} <span class="muted">(افتراضي)</span>{% endif %}</td>
+                <td>{{ row.ca.bank_name|default:"—" }}</td>
+                <td>{{ row.ca.account_number|default:"—" }}</td>
+                <td class="num" style="font-weight:600;
+                    color:{% if row.balance > 0 %}#16a34a{% elif row.balance < 0 %}#dc2626{% else %}#666{% endif %};">
+                    {{ row.balance|money:2 }}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="totals">
+                <td colspan="3" style="font-weight:700;">إجمالي {{ g.label }}</td>
+                <td class="num" style="font-weight:700;border-top:2px solid var(--ink);
+                            color:{% if g.total > 0 %}#16a34a{% elif g.total < 0 %}#dc2626{% else %}#666{% endif %};">
+                    {{ g.total|money:2 }}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+{% empty %}
+    <div style="text-align:center;color:var(--muted);padding:40px;">
+        لا توجد حسابات نقدية/بنوك/محافظ نشطة{% if type_filter %} من النوع المختار{% endif %}.
+    </div>
+{% endfor %}
+{% endblock %}

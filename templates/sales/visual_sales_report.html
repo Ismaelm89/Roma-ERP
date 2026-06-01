@@ -1,0 +1,271 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}تقرير المبيعات (مرئي){% endblock %}
+
+{% block page_wrapper %}
+<style>
+.page-wide {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: white;
+    padding: 28px 36px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--brand);
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.report-header h1 { margin: 0; color: var(--brand); font-size: 22px; }
+.report-header .muted { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.date-form {
+    display: flex; gap: 8px; align-items: center; font-size: 12px;
+}
+.date-form input[type="date"] {
+    padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;
+    font-family: inherit;
+}
+.date-form button.btn {
+    background: var(--brand); color: white; border: 0;
+    padding: 6px 14px; cursor: pointer; border-radius: 6px;
+    font-weight: 700;
+}
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.summary-cell {
+    background: #f5f7fa;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+}
+.summary-cell .label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.summary-cell .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+}
+.summary-cell.revenue .value { color: var(--green); }
+.summary-cell.profit .value { color: #d4a017; }
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+.product-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    page-break-inside: avoid;
+}
+.product-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+
+.rank-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--brand);
+    color: white;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.product-card:nth-child(1) .rank-badge { background: #d4a017; }  /* gold */
+.product-card:nth-child(2) .rank-badge { background: #888; }     /* silver */
+.product-card:nth-child(3) .rank-badge { background: #b87333; }  /* bronze */
+
+.product-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #f5f7fa;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+}
+.product-image img { width: 100%; height: 100%; object-fit: contain; }
+.no-image {
+    color: var(--muted); font-size: 12px; text-align: center;
+}
+.no-image .icon {
+    font-size: 36px; display: block; opacity: 0.5; margin-bottom: 4px;
+}
+
+.product-body {
+    padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 1;
+}
+.product-code {
+    font-weight: 800; color: var(--brand); font-size: 13px;
+    letter-spacing: 0.04em;
+}
+.product-name {
+    font-size: 11px; color: var(--ink); line-height: 1.4;
+    min-height: 30px;
+}
+
+.sale-revenue {
+    background: linear-gradient(135deg, #ebfbee 0%, #c8e6cb 100%);
+    border: 1px solid #2b8a3e;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+}
+.sale-revenue .label {
+    font-size: 10px; color: #1e5b2c; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sale-revenue .value {
+    font-size: 18px; font-weight: 800; color: var(--green);
+    font-variant-numeric: tabular-nums;
+}
+
+.sale-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    background: #fafafa;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+}
+.sale-stats .label {
+    color: var(--muted); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.sale-stats .value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sale-stats .profit { color: var(--green); }
+.sale-stats .margin { color: #d4a017; }
+
+.last-sold {
+    color: var(--muted); font-size: 10px; text-align: center;
+    margin-top: 2px;
+}
+
+@media print {
+    body { background: white; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    .page-wide { box-shadow: none; border: none; padding: 0; max-width: none; }
+    @page { size: A4 portrait; margin: 10mm; }
+    .products-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+}
+</style>
+
+<div class="page-wide">
+    <div class="report-header">
+        <div>
+            <h1>تقرير المبيعات بالصور</h1>
+            <div class="muted">من {{ date_from|date:"d/m/Y" }} إلى {{ date_to|date:"d/m/Y" }} — {{ total_items }} منتج</div>
+        </div>
+        <form method="get" class="date-form no-print">
+            <label>من: <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+            <label>إلى: <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+            <label style="margin-right: 8px;">
+                <input type="checkbox" name="show_zero" value="1" {% if show_zero %}checked{% endif %}>
+                إظهار اللي مفيش مبيعات
+            </label>
+            <button class="btn" type="submit">عرض</button>
+        </form>
+    </div>
+
+    <div class="summary-strip">
+        <div class="summary-cell">
+            <div class="label">منتجات تباع</div>
+            <div class="value">{{ total_items }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي الدستات</div>
+            <div class="value">{{ total_dozens|money:1 }}</div>
+        </div>
+        <div class="summary-cell">
+            <div class="label">إجمالي القطع</div>
+            <div class="value">{{ total_pieces|money:0 }}</div>
+        </div>
+        <div class="summary-cell revenue">
+            <div class="label">إجمالي المبيعات (EGP)</div>
+            <div class="value">{{ total_revenue|money:0 }}</div>
+        </div>
+        <div class="summary-cell profit">
+            <div class="label">إجمالي الربح (EGP)</div>
+            <div class="value">{{ total_profit|money:0 }}</div>
+        </div>
+    </div>
+
+    <div class="products-grid">
+    {% for row in rows %}
+        <div class="product-card">
+            <div class="rank-badge">{{ forloop.counter }}</div>
+            <div class="product-image">
+                {% if row.item.image %}
+                    <img src="{{ row.item.image.url }}" alt="{{ row.item.name_ar }}">
+                {% else %}
+                    <div class="no-image">
+                        <span class="icon">📷</span>
+                        لا توجد صورة
+                    </div>
+                {% endif %}
+            </div>
+            <div class="product-body">
+                <div class="product-code">{{ row.item.code }}</div>
+                <div class="product-name">{{ row.item.name_ar }}</div>
+
+                <div class="sale-revenue">
+                    <div class="label">إجمالي المبيعات</div>
+                    <div class="value">{{ row.revenue|money:0 }} EGP</div>
+                </div>
+
+                <div class="sale-stats">
+                    <div>
+                        <div class="label">دستة مباعة</div>
+                        <div class="value">{{ row.dozens_sold|money:1 }}</div>
+                    </div>
+                    <div>
+                        <div class="label">قطع</div>
+                        <div class="value">{{ row.pieces_sold|money:0 }}</div>
+                    </div>
+                    <div>
+                        <div class="label">الربح</div>
+                        <div class="value profit">{{ row.profit|money:0 }}</div>
+                    </div>
+                    <div>
+                        <div class="label">الهامش %</div>
+                        <div class="value margin">{{ row.margin_pct|money:1 }}%</div>
+                    </div>
+                </div>
+
+                {% if row.last_sold %}
+                <div class="last-sold">آخر بيع: {{ row.last_sold|date:"d/m/Y" }}</div>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--muted);">
+            مفيش مبيعات في الفترة دي. <br>
+            <small>غيّر التواريخ أو علّم "إظهار اللي مفيش مبيعات" لعرض كل المنتجات.</small>
+        </div>
+    {% endfor %}
+    </div>
+</div>
+{% endblock %}

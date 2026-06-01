@@ -1,0 +1,50 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}1) الأرصدة الافتتاحية للعملاء{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    اكتب الرصيد الافتتاحي لكل عميل (المبلغ اللي عليه لنا في بداية النشاط).
+    لو العميل ليه رصيد دائن (دفعة مقدّمة أو زيادة سداد) اكتب المبلغ بالسالب.
+    سيب الخانة فاضية للعملاء اللي مفيش عليهم رصيد.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الرصيد الافتتاحي</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    {% if rows %}
+    <table class="ob">
+        <thead>
+            <tr>
+                <th class="code">الكود</th>
+                <th>العميل</th>
+                <th class="num" style="width:180px;">الرصيد الافتتاحي</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td class="code">{{ r.obj.code }}</td>
+                <td class="lbl">{{ r.obj.name_ar }}</td>
+                <td class="num">
+                    <input type="number" step="0.01" name="amount_{{ r.obj.id }}"
+                           value="{{ r.amount }}" placeholder="0.00">
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn" type="submit">💾 حفظ أرصدة العملاء</button>
+        <a class="btn secondary" href="{% url 'opening:suppliers' %}">التالي: الموردين ⟵</a>
+    </div>
+    {% else %}
+    <div class="empty">مفيش عملاء متسجّلين. ضيف العملاء الأول من
+        <a href="/admin/sales/customer/add/" target="_blank">شاشة العملاء</a> وبعدين ارجع هنا.</div>
+    {% endif %}
+</form>
+{% endblock %}

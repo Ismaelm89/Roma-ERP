@@ -1,0 +1,95 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}المركز المالي (الميزانية){% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>المركز المالي (الميزانية)</h1>
+        <div class="muted">كما في {{ as_of|date:"d/m/Y" }}</div>
+    </div>
+    <div class="meta-block no-print">
+        <form method="get">
+            <label>التاريخ: <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}"></label>
+            <button class="btn" type="submit">عرض</button>
+        </form>
+    </div>
+</div>
+
+<h2>الأصول</h2>
+<table>
+    <thead><tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr></thead>
+    <tbody>
+    {% for r in asset_rows %}
+        <tr>
+            <td>{{ r.account.code }}</td>
+            <td>{{ r.account.name_ar }}</td>
+            <td class="num">{{ r.amount|money:2 }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 12px;">لا توجد أصول.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="2" style="font-weight: 700;">إجمالي الأصول</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ assets_total|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<h2>الخصوم</h2>
+<table>
+    <thead><tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr></thead>
+    <tbody>
+    {% for r in liability_rows %}
+        <tr>
+            <td>{{ r.account.code }}</td>
+            <td>{{ r.account.name_ar }}</td>
+            <td class="num">{{ r.amount|money:2 }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 12px;">لا توجد خصوم.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="2" style="font-weight: 700;">إجمالي الخصوم</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ liabilities_total|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<h2>حقوق الملكية</h2>
+<table>
+    <thead><tr><th>الكود</th><th>الحساب</th><th class="num">المبلغ</th></tr></thead>
+    <tbody>
+    {% for r in equity_rows %}
+        <tr>
+            <td>{{ r.account.code }}</td>
+            <td>{{ r.account.name_ar }}</td>
+            <td class="num">{{ r.amount|money:2 }}</td>
+        </tr>
+    {% endfor %}
+        <tr>
+            <td></td>
+            <td>صافي ربح/(خسارة) الفترة الجارية</td>
+            <td class="num">{{ ytd_net|money:2 }}</td>
+        </tr>
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="2" style="font-weight: 700;">إجمالي حقوق الملكية</td>
+            <td class="num" style="font-weight: 700; border-top: 2px solid var(--ink);">{{ equity_total|money:2 }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<table class="totals" style="width: 420px; margin-right: auto; margin-top: 20px;">
+    <tr><td class="label">إجمالي الأصول</td><td class="num">{{ assets_total|money:2 }}</td></tr>
+    <tr><td class="label">إجمالي الخصوم وحقوق الملكية</td><td class="num">{{ le_total|money:2 }}</td></tr>
+    <tr style="font-weight: 700; {% if balanced %}color: green;{% else %}color: #b00;{% endif %}">
+        <td>الفرق (يجب أن يكون صفر)</td>
+        <td class="num">{{ variance|money:2 }}</td>
+    </tr>
+</table>
+{% endblock %}

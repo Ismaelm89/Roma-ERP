@@ -1,0 +1,122 @@
+{% extends "sales/_base_print.html" %}
+{# Page title controls default filename when saving as PDF #}
+{% block title %}{{ receipt.customer.name_ar }} - {{ receipt.receipt_no }}{% endblock %}
+
+{% block page_wrapper %}
+<style>
+/* Compact layout so it fits on ONE A4 page */
+.page.copy {
+    position: relative;
+    overflow: hidden;
+    font-size: 13px;
+    padding: 20px 26px;
+}
+.page.copy h1 { font-size: 18px; margin: 0 0 4px; }
+.page.copy h2 { font-size: 14px; margin: 14px 0 6px; padding-bottom: 4px; }
+.page.copy .header-grid { margin-bottom: 10px; padding-bottom: 8px; gap: 12px; }
+.page.copy .company-block .logo { max-height: 48px; }
+.page.copy .party { padding: 8px 12px; }
+.page.copy .party > div { margin: 2px 0; }
+.page.copy table th { padding: 6px 8px; font-size: 12px; }
+.page.copy table td { padding: 5px 8px; font-size: 12px; }
+
+/* The big amount block — visual focal point */
+.page.copy .amount-block {
+    margin: 16px 0;
+    padding: 18px 22px;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffeaa7 100%);
+    border: 2px solid #d4a017;
+    border-radius: 10px;
+    text-align: center;
+}
+.page.copy .amount-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.page.copy .amount-value {
+    font-size: 36px;
+    font-weight: 800;
+    color: #5d4015;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.page.copy .amount-currency {
+    font-size: 22px;
+    font-weight: 700;
+    color: #8b6914;
+}
+
+/* Watermark */
+.page.copy::before {
+    content: attr(data-copy);
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    font-size: 240px;
+    font-weight: 800;
+    color: rgba(43, 58, 85, 0.28);
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: 0.35em;
+    white-space: nowrap;
+    user-select: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.page.copy > * { position: relative; z-index: 1; }
+
+/* Signature footer with 2 columns */
+.receipt-signatures {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+}
+.receipt-signatures .sig-note {
+    color: var(--muted);
+    font-size: 12px;
+    font-style: italic;
+    text-align: center;
+    padding: 4px 0 18px;
+}
+.receipt-signatures .sig-row-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+.receipt-signatures .sig-cell {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.receipt-signatures .sig-label {
+    font-weight: 700;
+    color: var(--brand);
+    font-size: 13px;
+    white-space: nowrap;
+}
+.receipt-signatures .sig-line {
+    flex: 1;
+    border-bottom: 1px solid var(--ink);
+    min-height: 28px;
+}
+
+@media print {
+    .page.copy { page-break-after: always; page-break-inside: avoid; }
+    .page.copy:last-child { page-break-after: auto; }
+    @page { size: A4 portrait; margin: 12mm; }
+    .amount-block,
+    .page.copy::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+{% for copy_label in copies %}
+<div class="page copy" data-copy="{{ copy_label }}">
+    {% include "sales/_receipt_body.html" %}
+</div>
+{% endfor %}
+{% endblock %}

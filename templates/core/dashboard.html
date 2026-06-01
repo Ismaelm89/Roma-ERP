@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Roma ERP — لوحة التحكم</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --brand: #2b3a55;
+    --brand-2: #3d5277;
+    --ink: #111;
+    --muted: #666;
+    --line: #e2e2e2;
+    --soft: #f5f7fa;
+    --green: #2b8a3e;
+    --green-soft: #ebfbee;
+    --red: #b71c1c;
+    --red-soft: #fff0f0;
+    --amber: #b08800;
+    --amber-soft: #fff8e1;
+}
+* { box-sizing: border-box; }
+body {
+    font-family: 'Cairo', 'Segoe UI', Arial, sans-serif;
+    direction: rtl;
+    color: var(--ink);
+    margin: 0;
+    background: var(--soft);
+    font-size: 14px;
+    line-height: 1.5;
+}
+header.topbar {
+    background: var(--brand);
+    color: white;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+header.topbar h1 { margin: 0; font-size: 20px; font-weight: 700; }
+header.topbar nav a {
+    color: white;
+    text-decoration: none;
+    margin-inline-start: 16px;
+    font-size: 13px;
+    opacity: 0.85;
+}
+header.topbar nav a:hover { opacity: 1; text-decoration: underline; }
+.container { max-width: 1280px; margin: 0 auto; padding: 24px 28px 60px; }
+h2 { color: var(--brand); margin: 24px 0 10px; font-size: 16px; font-weight: 700;
+      border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+/* KPI cards */
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+}
+.kpi {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: var(--ink);
+    display: block;
+    transition: box-shadow .15s, transform .15s;
+}
+.kpi:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-1px); }
+.kpi .label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.kpi .value {
+    margin-top: 4px;
+    font-size: 22px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+.kpi .sub { color: var(--muted); font-size: 11px; }
+.kpi.green .value { color: var(--green); }
+.kpi.amber .value { color: var(--amber); }
+.kpi.red .value { color: var(--red); }
+.kpi.green { background: var(--green-soft); border-color: rgba(43,138,62,.25); }
+.kpi.amber { background: var(--amber-soft); border-color: rgba(176,136,0,.3); }
+.kpi.red { background: var(--red-soft); border-color: rgba(183,28,28,.25); }
+
+/* Quick actions */
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.actions a {
+    background: var(--brand);
+    color: white;
+    text-decoration: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+}
+.actions a.secondary { background: white; color: var(--brand); border: 1px solid var(--brand); }
+.actions a:hover { background: var(--brand-2); color: white; }
+
+/* Report tiles */
+.reports {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+.report-tile {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: box-shadow .15s, border-color .15s;
+}
+.report-tile:hover { box-shadow: 0 4px 14px rgba(0,0,0,.06); border-color: var(--brand); }
+.report-tile .icon { font-size: 22px; }
+.report-tile .title { font-weight: 700; color: var(--brand); }
+.report-tile .desc { color: var(--muted); font-size: 12px; }
+
+/* Tables */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; font-size: 13px; }
+th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding: 18px; }
+
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+
+/* Admin modules grid */
+.admin-modules {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 10px;
+}
+.admin-module {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.admin-module-header {
+    background: var(--brand);
+    color: white;
+    padding: 8px 14px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-align: center;
+}
+.admin-module ul { list-style: none; margin: 0; padding: 0; }
+.admin-module li {
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    gap: 8px;
+}
+.admin-module li:last-child { border-bottom: none; }
+.admin-module li a.model-link {
+    flex: 1;
+    color: var(--brand);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+}
+.admin-module li a.model-link:hover { text-decoration: underline; }
+.admin-module li a.add-link {
+    color: var(--green);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.admin-module li a.add-link:hover { color: #1e6b2f; }
+
+/* Charts grid */
+.charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 16px;
+    margin-top: 12px;
+}
+.chart-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+.chart-card h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: var(--brand);
+    font-weight: 700;
+}
+.chart-card canvas {
+    max-height: 260px;
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <h1>Roma ERP — لوحة التحكم</h1>
+    <nav>
+        <a href="/admin/">إدارة النظام</a>
+        <a href="/admin/logout/">تسجيل الخروج</a>
+    </nav>
+</header>
+
+<div class="container">
+
+<!-- KPI cards -->
+<div class="kpis">
+    <a class="kpi" href="/admin/sales/salesinvoice/">
+        <div class="label">مبيعات اليوم</div>
+        <div class="value">{{ today_sales_value|money:0 }}</div>
+        <div class="sub">{{ today_sales_count }} فاتورة · EGP</div>
+    </a>
+    <a class="kpi" href="/admin/sales/salesinvoice/">
+        <div class="label">مبيعات الشهر الحالي</div>
+        <div class="value">{{ mtd_sales_value|money:0 }}</div>
+        <div class="sub">من بداية الشهر · EGP</div>
+    </a>
+    <a class="kpi" href="/admin/sales/salesinvoice/">
+        <div class="label">مبيعات العام</div>
+        <div class="value">{{ ytd_sales_value|money:0 }}</div>
+        <div class="sub">سنة {{ year_label }} · EGP</div>
+    </a>
+    <a class="kpi green" href="/reports/cash-balances/?type=CASH">
+        <div class="label">النقدية</div>
+        <div class="value">{{ cash_balance|money:0 }}</div>
+        <div class="sub">إجمالي الخزائن · EGP</div>
+    </a>
+    <a class="kpi green" href="/reports/cash-balances/?type=BANK">
+        <div class="label">رصيد البنك</div>
+        <div class="value">{{ bank_balance|money:0 }}</div>
+        <div class="sub">أرصدة البنوك · EGP</div>
+    </a>
+    <a class="kpi green" href="/reports/cash-balances/?type=WALLET">
+        <div class="label">المحافظ الإلكترونية</div>
+        <div class="value">{{ wallet_balance|money:0 }}</div>
+        <div class="sub">فودافون كاش / إنستاباي · EGP</div>
+    </a>
+    <a class="kpi {% if ar_balance > 0 %}amber{% endif %}" href="/sales/aging/">
+        <div class="label">المستحق من العملاء</div>
+        <div class="value">{{ ar_balance|money:0 }}</div>
+        <div class="sub">إجمالي الذمم المدينة · EGP</div>
+    </a>
+    <a class="kpi {% if ap_balance > 0 %}amber{% endif %}" href="/manufacturing/suppliers/balances/">
+        <div class="label">المستحق للموردين</div>
+        <div class="value">{{ ap_balance|money:0 }}</div>
+        <div class="sub">إجمالي أرصدة الموردين · EGP</div>
+    </a>
+    <a class="kpi" href="/inventory/valuation/">
+        <div class="label">قيمة المخزون</div>
+        <div class="value">{{ inventory_value|money:0 }}</div>
+        <div class="sub">سعر التكلفة × الكمية · EGP</div>
+    </a>
+    <a class="kpi {% if low_stock_count > 0 %}amber{% endif %}" href="/admin/inventory/itemvariant/">
+        <div class="label">منتجات منخفضة المخزون</div>
+        <div class="value">{{ low_stock_count }}</div>
+        <div class="sub">تحت حد إعادة الطلب</div>
+    </a>
+    <a class="kpi {% if overdue_count > 0 %}red{% endif %}" href="/sales/aging/">
+        <div class="label">فواتير متأخرة</div>
+        <div class="value">{{ overdue_count }}</div>
+        <div class="sub">بقيمة {{ overdue_total|money:0 }} EGP</div>
+    </a>
+</div>
+
+<!-- Admin modules grid -->
+<h2>الأرصدة الافتتاحية (بداية النشاط)</h2>
+<div class="reports">
+    <a class="report-tile" href="/opening/">
+        <span class="icon">🏁</span>
+        <div><div class="title">ملخّص الأرصدة الافتتاحية</div><div class="desc">ابدأ من هنا — كل الخطوات وحالتها</div></div>
+    </a>
+    <a class="report-tile" href="/opening/customers/">
+        <span class="icon">👥</span>
+        <div><div class="title">1) أرصدة العملاء</div><div class="desc">اللي ليهم وعليهم أول المدة</div></div>
+    </a>
+    <a class="report-tile" href="/opening/suppliers/">
+        <span class="icon">🚚</span>
+        <div><div class="title">2) أرصدة الموردين</div><div class="desc">اللي عليهم وليهم أول المدة</div></div>
+    </a>
+    <a class="report-tile" href="/opening/inventory/">
+        <span class="icon">📦</span>
+        <div><div class="title">3) المخزون</div><div class="desc">كميات وتكلفة المنتجات التامة</div></div>
+    </a>
+    <a class="report-tile" href="/opening/fabric/">
+        <span class="icon">🧵</span>
+        <div><div class="title">4) الأقمشة</div><div class="desc">دفعات القماش أول المدة</div></div>
+    </a>
+    <a class="report-tile" href="/opening/assets/">
+        <span class="icon">🏭</span>
+        <div><div class="title">5) الأصول الثابتة</div><div class="desc">القيمة الدفترية للأصول</div></div>
+    </a>
+    <a class="report-tile" href="/opening/cash/">
+        <span class="icon">💵</span>
+        <div><div class="title">6) النقدية والبنوك</div><div class="desc">أرصدة الخزائن والمحافظ</div></div>
+    </a>
+    <a class="report-tile" href="/opening/finalize/">
+        <span class="icon">🔒</span>
+        <div><div class="title">7) الإقفال</div><div class="desc">رأس المال + جاري الشريك</div></div>
+    </a>
+</div>
+
+<h2>الموديولات والإجراءات السريعة</h2>
+<div class="admin-modules">
+    {% for mod in admin_modules %}
+    <div class="admin-module">
+        <div class="admin-module-header">{{ mod.label }}</div>
+        <ul>
+        {% for item in mod.items %}
+            <li>
+                <a class="model-link" href="{{ item.list_url }}">{{ item.label }}</a>
+                <a class="add-link" href="{{ item.add_url }}">+ أضف</a>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Charts -->
+<h2>المخططات والتحليل</h2>
+<div class="charts">
+    <div class="chart-card">
+        <h3>المبيعات الشهرية — آخر 6 أشهر (EGP)</h3>
+        <canvas id="chart-monthly-sales"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>أعمار الذمم المدينة</h3>
+        <canvas id="chart-ar-aging"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>أفضل 8 عملاء بحجم المبيعات</h3>
+        <canvas id="chart-top-customers"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>أفضل 8 موديلات بالكميات المباعة</h3>
+        <canvas id="chart-top-items"></canvas>
+    </div>
+</div>
+
+{{ chart_monthly_sales|json_script:"data-monthly-sales" }}
+{{ chart_top_customers|json_script:"data-top-customers" }}
+{{ chart_top_items|json_script:"data-top-items" }}
+{{ chart_ar_aging|json_script:"data-ar-aging" }}
+
+<!-- Performance report — big print button -->
+<h2>تقرير إجمالي الأداء</h2>
+<div style="margin-bottom: 8px;">
+    <a href="/sales/performance/" target="_blank"
+       style="display: inline-block; background: linear-gradient(135deg, #2b3a55 0%, #3d5277 100%); color: white; padding: 14px 28px; text-decoration: none; font-weight: 800; font-size: 15px; border-radius: 10px; box-shadow: 0 3px 8px rgba(43,58,85,0.3);">
+        📊 طباعة إجمالي الأداء (4 تقارير في وثيقة واحدة)
+    </a>
+    <div style="color: var(--muted); font-size: 12px; margin-top: 6px;">
+        يجمع: تقرير العملاء + تقرير المبيعات بالصور + تقرير المنتجات المرئي + قائمة الأرباح والخسائر
+    </div>
+</div>
+
+<!-- Reports -->
+<h2>التقارير المالية والتشغيلية</h2>
+<div class="reports">
+    <a class="report-tile" href="/reports/trial-balance/" target="_blank">
+        <span class="icon">⚖️</span>
+        <div><div class="title">ميزان المراجعة</div><div class="desc">أرصدة كل الحسابات حتى تاريخ معين</div></div>
+    </a>
+    <a class="report-tile" href="/reports/pnl/" target="_blank">
+        <span class="icon">📈</span>
+        <div><div class="title">قائمة الأرباح والخسائر</div><div class="desc">إيرادات ومصروفات الفترة</div></div>
+    </a>
+    <a class="report-tile" href="/reports/balance-sheet/" target="_blank">
+        <span class="icon">📊</span>
+        <div><div class="title">المركز المالي (الميزانية)</div><div class="desc">أصول وخصوم وحقوق ملكية</div></div>
+    </a>
+    <a class="report-tile" href="/inventory/valuation/" target="_blank">
+        <span class="icon">📦</span>
+        <div><div class="title">تقييم المخزون</div><div class="desc">الكميات × متوسط التكلفة</div></div>
+    </a>
+    <a class="report-tile" href="/inventory/products/" target="_blank">
+        <span class="icon">🖼️</span>
+        <div><div class="title">تقرير المنتجات (مرئي)</div><div class="desc">كل المنتجات بالصور + الكميات والقيمة</div></div>
+    </a>
+    <a class="report-tile" href="/sales/report-visual/" target="_blank">
+        <span class="icon">🏆</span>
+        <div><div class="title">تقرير المبيعات (مرئي)</div><div class="desc">المنتجات مرتبة بالربح + صور + هامش</div></div>
+    </a>
+    <a class="report-tile" href="/sales/customers-report/" target="_blank">
+        <span class="icon">👥</span>
+        <div><div class="title">تقرير العملاء</div><div class="desc">المبيعات والمدفوعات والرصيد لكل عميل</div></div>
+    </a>
+    <a class="report-tile" href="/sales/aging/" target="_blank">
+        <span class="icon">⏱️</span>
+        <div><div class="title">أعمار الذمم المدينة</div><div class="desc">0-30 / 31-60 / 61-90 / 90+</div></div>
+    </a>
+    <a class="report-tile" href="/admin/sales/customer/" target="_blank">
+        <span class="icon">👥</span>
+        <div><div class="title">العملاء وأرصدتهم</div><div class="desc">قائمة العملاء مع الرصيد الحالي</div></div>
+    </a>
+    <a class="report-tile" href="/manufacturing/fabric/on-hand/" target="_blank">
+        <span class="icon">🧵</span>
+        <div><div class="title">القماش الموجود</div><div class="desc">دفعات لها رصيد متبقي + قيمة المخزون</div></div>
+    </a>
+    <a class="report-tile" href="/manufacturing/fabric/movements/" target="_blank">
+        <span class="icon">📜</span>
+        <div><div class="title">حركات القماش</div><div class="desc">سجل كل شراء/تصبيغ/صرف/إهدار</div></div>
+    </a>
+    <a class="report-tile" href="/manufacturing/suppliers/balances/" target="_blank">
+        <span class="icon">💰</span>
+        <div><div class="title">أرصدة الموردين والمصابغ</div><div class="desc">رصيد كل جهة + كشف حساب لكل واحد</div></div>
+    </a>
+</div>
+
+<!-- Top items + customers -->
+<h2>أعلى المبيعات هذا الشهر</h2>
+<div class="split">
+    <div class="card">
+        <div style="font-weight: 700; margin-bottom: 8px; color: var(--brand);">أعلى 5 منتجات</div>
+        <table>
+            <thead>
+                <tr><th>الكود</th><th>المنتج</th><th class="num">عدد الدستات</th><th class="num">القيمة</th></tr>
+            </thead>
+            <tbody>
+            {% for r in top_items %}
+                <tr>
+                    <td>{{ r.item__code }}</td>
+                    <td>{{ r.item__name_ar }}</td>
+                    <td class="num">{{ r.qty }}</td>
+                    <td class="num">{{ r.revenue|money:0 }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4" class="empty">لا توجد مبيعات هذا الشهر بعد.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <div style="font-weight: 700; margin-bottom: 8px; color: var(--brand);">أعلى 5 عملاء</div>
+        <table>
+            <thead>
+                <tr><th>الكود</th><th>العميل</th><th class="num">الفواتير</th><th class="num">القيمة</th></tr>
+            </thead>
+            <tbody>
+            {% for r in top_customers %}
+                <tr>
+                    <td>{{ r.customer__code }}</td>
+                    <td>{{ r.customer__name_ar }}</td>
+                    <td class="num">{{ r.invoices }}</td>
+                    <td class="num">{{ r.revenue|money:0 }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4" class="empty">لا توجد مبيعات هذا الشهر بعد.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2>آخر الفواتير المرحّلة</h2>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>رقم الفاتورة</th>
+                <th>التاريخ</th>
+                <th>العميل</th>
+                <th class="num">الإجمالي</th>
+                <th class="num">المتبقي</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for inv in recent_invoices %}
+            <tr>
+                <td>{{ inv.invoice_no }}</td>
+                <td>{{ inv.date|date:"d/m/Y" }}</td>
+                <td>{{ inv.customer.name_ar }}</td>
+                <td class="num">{{ inv.grand_total|money:2 }}</td>
+                <td class="num">{{ inv.balance_due|money:2 }}</td>
+                <td>
+                    <a href="/admin/sales/salesinvoice/{{ inv.pk }}/change/">فتح</a>
+                    · <a href="/sales/invoice/{{ inv.pk }}/print/" target="_blank">طباعة</a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6" class="empty">لا توجد فواتير مرحّلة بعد.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</div>
+
+<footer>
+    Roma ERP · جميع التقارير قابلة للطباعة مباشرة من المتصفح (Ctrl+P → حفظ كـ PDF) — بدون رسوم إضافية.
+</footer>
+
+<script>
+/* Chart.js initialization — runs after the page loads */
+(function () {
+    function readData(id) {
+        var el = document.getElementById(id);
+        if (!el) return { labels: [], values: [] };
+        try { return JSON.parse(el.textContent); }
+        catch (e) { return { labels: [], values: [] }; }
+    }
+
+    var BRAND = '#2b3a55';
+    var GREEN = '#2b8a3e';
+    var AMBER = '#d4a017';
+    var RED   = '#b71c1c';
+    var GREY  = '#888';
+
+    var commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    };
+
+    // 1) Monthly sales — bar chart
+    var ms = readData('data-monthly-sales');
+    new Chart(document.getElementById('chart-monthly-sales'), {
+        type: 'bar',
+        data: {
+            labels: ms.labels,
+            datasets: [{
+                label: 'مبيعات',
+                data: ms.values,
+                backgroundColor: BRAND,
+                borderRadius: 6,
+            }],
+        },
+        options: commonOptions,
+    });
+
+    // 2) AR aging — doughnut
+    var ag = readData('data-ar-aging');
+    new Chart(document.getElementById('chart-ar-aging'), {
+        type: 'doughnut',
+        data: {
+            labels: ag.labels.map(function (x) { return x + ' يوم'; }),
+            datasets: [{
+                data: ag.values,
+                backgroundColor: [GREEN, AMBER, '#e67e22', RED],
+                borderWidth: 2,
+                borderColor: '#fff',
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 11 } } },
+            },
+        },
+    });
+
+    // 3) Top customers — horizontal bar
+    var tc = readData('data-top-customers');
+    new Chart(document.getElementById('chart-top-customers'), {
+        type: 'bar',
+        data: {
+            labels: tc.labels,
+            datasets: [{
+                label: 'مبيعات',
+                data: tc.values,
+                backgroundColor: GREEN,
+                borderRadius: 6,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true } },
+        },
+    });
+
+    // 4) Top items — vertical bar
+    var ti = readData('data-top-items');
+    new Chart(document.getElementById('chart-top-items'), {
+        type: 'bar',
+        data: {
+            labels: ti.labels,
+            datasets: [{
+                label: 'كميات',
+                data: ti.values,
+                backgroundColor: AMBER,
+                borderRadius: 6,
+            }],
+        },
+        options: commonOptions,
+    });
+})();
+</script>
+
+</body>
+</html>
