@@ -1152,44 +1152,64 @@ class AccessoryUsage(models.Model):
                 * Decimal(self.unit_cost)).quantize(Decimal('0.01'))
 
 
-class ProductionGroup(models.Model):
-    """صف متابعة مراحل التشغيل على أمر إنتاج — لكل صف: المجموعة والكمية في كل مرحلة
-    من المراحل الأربعة (تشغيل / تشطيب / جودة / كوي) + ملاحظات.
+class ProductionStageRowBase(models.Model):
+    """صف صنايعي/كمية في مرحلة من مراحل أمر الإنتاج (طباعة / جودة / كوي).
 
-    كل مرحلة بتسجّل أي مجموعة عملت كام قطعة فيها. مجموع كميات أي مرحلة المفروض
-    يساوي إجمالي كميات المقاسات — بيتفحص ويتنبّه عند الحفظ.
+    كل مرحلة ليها جدول مستقل، ومجموع كميات أي مرحلة المفروض يساوي إجمالي
+    كميات المقاسات — بيتفحص ويتنبّه عند الحفظ.
     """
-    order = models.ForeignKey('ProductionOrder', on_delete=models.CASCADE,
-                               related_name='groups', verbose_name='أمر الإنتاج')
-
-    # التشغيل (sewing)
-    sewing_group = models.CharField('مجموعة التشغيل', max_length=200, blank=True,
-                                    help_text='اسم مجموعة/ورشة التشغيل (الخياطة)')
-    sewing_qty = models.PositiveIntegerField('كمية التشغيل', default=0)
-
-    # التشطيب (finishing)
-    finishing_group = models.CharField('مجموعة التشطيب', max_length=200, blank=True)
-    finishing_qty = models.PositiveIntegerField('كمية التشطيب', default=0)
-
-    # الجودة (quality)
-    quality_group = models.CharField('مجموعة الجودة', max_length=200, blank=True)
-    quality_qty = models.PositiveIntegerField('كمية الجودة', default=0)
-
-    # الكوي (ironing)
-    ironing_group = models.CharField('مجموعة الكوي', max_length=200, blank=True)
-    ironing_qty = models.PositiveIntegerField('كمية الكوي', default=0)
-
-    notes = models.CharField('ملاحظات', max_length=300, blank=True)
+    worker = models.CharField('الصنايعي', max_length=200, blank=True)
+    qty = models.PositiveIntegerField('الكمية', default=0)
 
     class Meta:
-        verbose_name = 'مرحلة تشغيل'
-        verbose_name_plural = 'مجموعات ومراحل التشغيل'
+        abstract = True
         ordering = ['id']
 
     def __str__(self):
-        first = (self.sewing_group or self.finishing_group or self.quality_group
-                 or self.ironing_group or 'مرحلة')
-        return f'{self.order.order_no} / {first}'
+        return f'{self.order.order_no} / {self.worker or "—"} ({self.qty})'
+
+
+class ProductionPrintingRow(ProductionStageRowBase):
+    """1) مرحلة الطباعة — الصنايعي والكمية."""
+    order = models.ForeignKey('ProductionOrder', on_delete=models.CASCADE,
+                               related_name='printing_rows', verbose_name='أمر الإنتاج')
+
+    class Meta(ProductionStageRowBase.Meta):
+        verbose_name = 'صف طباعة'
+        verbose_name_plural = 'مرحلة الطباعة'
+
+
+class ProductionOperationRow(ProductionStageRowBase):
+    """2) مراحل التشغيل — رقم/اسم المرحلة + المكنة + الصنايعي + الكمية."""
+    order = models.ForeignKey('ProductionOrder', on_delete=models.CASCADE,
+                               related_name='operation_rows', verbose_name='أمر الإنتاج')
+    stage_no = models.CharField('رقم المرحلة', max_length=30, blank=True)
+    stage_name = models.CharField('اسم المرحلة', max_length=200, blank=True)
+    machine = models.CharField('المكنة', max_length=200, blank=True)
+
+    class Meta(ProductionStageRowBase.Meta):
+        verbose_name = 'صف تشغيل'
+        verbose_name_plural = 'مراحل التشغيل'
+
+
+class ProductionQualityRow(ProductionStageRowBase):
+    """3) مرحلة الجودة — الصنايعي والكمية."""
+    order = models.ForeignKey('ProductionOrder', on_delete=models.CASCADE,
+                               related_name='quality_rows', verbose_name='أمر الإنتاج')
+
+    class Meta(ProductionStageRowBase.Meta):
+        verbose_name = 'صف جودة'
+        verbose_name_plural = 'مرحلة الجودة'
+
+
+class ProductionIroningRow(ProductionStageRowBase):
+    """4) مرحلة الكوي — الصنايعي والكمية."""
+    order = models.ForeignKey('ProductionOrder', on_delete=models.CASCADE,
+                               related_name='ironing_rows', verbose_name='أمر الإنتاج')
+
+    class Meta(ProductionStageRowBase.Meta):
+        verbose_name = 'صف كوي'
+        verbose_name_plural = 'مرحلة الكوي'
 
 
 class FabricMovement(models.Model):

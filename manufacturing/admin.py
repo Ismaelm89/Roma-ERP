@@ -13,7 +13,8 @@ from .models import (
     FabricBatch, FabricMovement, SupplierPayment,
     FabricPurchaseInvoice, AccessoryPurchaseInvoice,
     ProductionOrder, ProductionSubModel, ProductionSize, FabricUsage,
-    ProductionGroup, Accessory, AccessoryUsage, AccessoryPurchase, Size,
+    ProductionPrintingRow, ProductionOperationRow, ProductionQualityRow,
+    ProductionIroningRow, Accessory, AccessoryUsage, AccessoryPurchase, Size,
     ProductSizeRecipe, ProductSizeAccessory,
     ManufacturingWagePayment,
 )
@@ -610,23 +611,50 @@ class FabricUsageInline(admin.TabularInline):
         return False
 
 
-class ProductionGroupInline(LockedInlineMixin, admin.TabularInline):
-    """مراحل التشغيل على الأمر — كل مرحلة (تشغيل / تشطيب / جودة / كوي) بمجموعة
-    وكمية، زائد ملاحظات. الجدول بيتعرض 5 صفوف على طول (المملوء + الباقي فاضي)،
-    والمستخدم يقدر يزوّد صفوف بنفسه لو احتاج. بيظهر في طباعة الخطة وبعد الإنتاج."""
-    model = ProductionGroup
-    extra = 5
-    fields = ('sewing_group', 'sewing_qty', 'finishing_group', 'finishing_qty',
-              'quality_group', 'quality_qty', 'ironing_group', 'ironing_qty', 'notes')
+class _StageRowInlineBase(LockedInlineMixin, admin.TabularInline):
+    """أساس جداول مراحل الشغل — كل مرحلة جدول مستقل بيتعرض بعدد صفوف ثابت
+    (المملوء + الباقي فاضي)، والمستخدم يقدر يضيف صفوف زيادة بزر «إضافة صف».
+    لو الأمر متقفل (مكتمل/ملغي) منعرضش صفوف فاضية."""
+    min_rows = 5
+    related_attr = None  # related_name على ProductionOrder
 
     def get_extra(self, request, obj=None, **kwargs):
-        """نكمّل صفوف الإدخال لحد 5 على طول (المملوء + الباقي فاضي)، والمستخدم
-        يقدر يضيف أكتر بزر «إضافة صف» لو احتاج. لو الأمر متقفل (مكتمل/ملغي)
-        منعرضش صفوف زيادة."""
         if self._locked():
             return 0
-        existing = obj.groups.count() if obj is not None else 0
-        return max(0, 5 - existing)
+        existing = getattr(obj, self.related_attr).count() if obj is not None else 0
+        return max(0, self.min_rows - existing)
+
+
+class ProductionPrintingInline(_StageRowInlineBase):
+    """1) مرحلة الطباعة — 5 صفوف (الصنايعي + الكمية)."""
+    model = ProductionPrintingRow
+    fields = ('worker', 'qty')
+    min_rows = 5
+    related_attr = 'printing_rows'
+
+
+class ProductionOperationInline(_StageRowInlineBase):
+    """2) مراحل التشغيل — 15 صف (رقم المرحلة + اسمها + المكنة + الصنايعي + الكمية)."""
+    model = ProductionOperationRow
+    fields = ('stage_no', 'stage_name', 'machine', 'worker', 'qty')
+    min_rows = 15
+    related_attr = 'operation_rows'
+
+
+class ProductionQualityInline(_StageRowInlineBase):
+    """3) مرحلة الجودة — 5 صفوف (الصنايعي + الكمية)."""
+    model = ProductionQualityRow
+    fields = ('worker', 'qty')
+    min_rows = 5
+    related_attr = 'quality_rows'
+
+
+class ProductionIroningInline(_StageRowInlineBase):
+    """4) مرحلة الكوي — 5 صفوف (الصنايعي + الكمية)."""
+    model = ProductionIroningRow
+    fields = ('worker', 'qty')
+    min_rows = 5
+    related_attr = 'ironing_rows'
 
 
 class AccessoryUsageInline(LockedInlineMixin, admin.TabularInline):
@@ -684,7 +712,9 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
     )
     # جدول «استهلاكات القماش» (FabricUsageInline) للعرض فقط — بيتعبّى تلقائياً
     # وقت الحفظ بصفّ مخطط من الوصفة، وبيتعاد بناؤه بالخصم الفعلي وقت «انتج».
-    inlines = [ProductionSizeInline, FabricUsageInline, ProductionGroupInline,
+    inlines = [ProductionSizeInline, FabricUsageInline,
+               ProductionPrintingInline, ProductionOperationInline,
+               ProductionQualityInline, ProductionIroningInline,
                AccessoryUsageInline]
     actions = ('action_load_recipe', 'action_produce', 'action_cancel')
     change_form_template = 'admin/manufacturing/productionorder/change_form.html'
@@ -799,23 +829,22 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
         # عبّي جدول «استهلاكات القماش» بصفّ مخطط من الوصفة عند كل حفظ (مرحلة الخطة).
         # وقت «انتج» الدالة produce بتمسحه وتعيد بناءه بالخصم الفعلي من الدفعات.
         refresh_planned_fabric_usage(order)
-        # تأكد إن مجموع كل مرحلة (تشغيل/تشطيب/جودة/كوي) = إجمالي كميات المقاسات.
+        # تأكد إن مجموع كل مرحلة (طباعة/تشغيل/جودة/كوي) = إجمالي كميات المقاسات.
         target = order.total_pieces
-        groups = list(order.groups.all())
         stages = (
-            ('التشغيل', 'sewing_qty'),
-            ('التشطيب', 'finishing_qty'),
-            ('الجودة', 'quality_qty'),
-            ('الكوي', 'ironing_qty'),
+            ('الطباعة', order.printing_rows),
+            ('التشغيل', order.operation_rows),
+            ('الجودة', order.quality_rows),
+            ('الكوي', order.ironing_rows),
         )
-        for label, attr in stages:
-            stage_total = sum(getattr(g, attr) or 0 for g in groups)
+        for label, rel in stages:
+            stage_total = sum(r.qty or 0 for r in rel.all())
             if stage_total and stage_total != target:
                 diff = stage_total - target
                 word = 'ناقص' if diff < 0 else 'زيادة'
                 self.message_user(
                     request,
-                    f'⚠️ تنبيه: مجموع كميات مرحلة {label} في مجموعات الشغل {stage_total} قطعة، '
+                    f'⚠️ تنبيه: مجموع كميات مرحلة {label} {stage_total} قطعة، '
                     f'لكن إجمالي كميات المقاسات {target} قطعة ({word} {abs(diff)}). '
                     f'راجع الكميات.',
                     level=messages.WARNING,

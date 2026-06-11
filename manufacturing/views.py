@@ -183,7 +183,9 @@ def _production_order_context(order_pk):
             .select_related('item', 'customer')
             .prefetch_related('sub_models', 'sizes__size', 'sizes__sub_model',
                               'fabric_usages__batch',
-                              'accessory_usages__accessory', 'groups'),
+                              'accessory_usages__accessory',
+                              'printing_rows', 'operation_rows',
+                              'quality_rows', 'ironing_rows'),
         pk=order_pk,
     )
 
@@ -264,39 +266,42 @@ def _production_order_context(order_pk):
                 'qty': Decimal(qty).quantize(Decimal('0.001')),
             })
 
-    groups = list(order.groups.all())
-    # مراحل الشغل الأربعة — كل مرحلة ليها مجموع كميات مستقل، وبنقارنه بإجمالي القطع.
+    # ---- مراحل الشغل الأربعة (طباعة / تشغيل / جودة / كوي) — جدول مستقل لكل
+    # مرحلة بعدد صفوف ثابت (المملوء + الباقي فاضي للتعبئة باليد)، ومجموع كميات
+    # كل مرحلة بيتقارن بإجمالي القطع. ----
+    def _stage_rows(rel, min_rows, op=False):
+        rows = []
+        for r in rel.all():
+            row = {'worker': r.worker, 'qty': r.qty or ''}
+            if op:
+                row.update({'stage_no': r.stage_no, 'stage_name': r.stage_name,
+                            'machine': r.machine})
+            rows.append(row)
+        blank = ({'stage_no': '', 'stage_name': '', 'machine': '', 'worker': '', 'qty': ''}
+                 if op else {'worker': '', 'qty': ''})
+        while len(rows) < min_rows:
+            rows.append(dict(blank))
+        return rows
+
     stage_defs = (
-        ('التشغيل', 'sewing_qty'),
-        ('التشطيب', 'finishing_qty'),
-        ('الجودة', 'quality_qty'),
-        ('الكوي', 'ironing_qty'),
+        ('الطباعة', order.printing_rows),
+        ('التشغيل', order.operation_rows),
+        ('الجودة', order.quality_rows),
+        ('الكوي', order.ironing_rows),
     )
     stage_totals = []
-    for label, qattr in stage_defs:
-        tot = sum(getattr(g, qattr) or 0 for g in groups)
+    for label, rel in stage_defs:
+        tot = sum(r.qty or 0 for r in rel.all())
         stage_totals.append({
             'label': label,
             'total': tot,
             'match': (tot == grand_total) if tot else True,
         })
 
-    # ---- جدول المجموعات: 5 صفوف على الأقل (المملوء + الباقي فاضي للتعبئة باليد) ----
-    group_rows = []
-    for g in groups:
-        group_rows.append({
-            'sewing_group': g.sewing_group, 'sewing_qty': g.sewing_qty,
-            'finishing_group': g.finishing_group, 'finishing_qty': g.finishing_qty,
-            'quality_group': g.quality_group, 'quality_qty': g.quality_qty,
-            'ironing_group': g.ironing_group, 'ironing_qty': g.ironing_qty,
-            'notes': g.notes,
-        })
-    while len(group_rows) < 5:
-        group_rows.append({
-            'sewing_group': '', 'sewing_qty': '', 'finishing_group': '',
-            'finishing_qty': '', 'quality_group': '', 'quality_qty': '',
-            'ironing_group': '', 'ironing_qty': '', 'notes': '',
-        })
+    printing_rows = _stage_rows(order.printing_rows, 5)
+    operation_rows = _stage_rows(order.operation_rows, 15, op=True)
+    quality_rows = _stage_rows(order.quality_rows, 5)
+    ironing_rows = _stage_rows(order.ironing_rows, 5)
 
     return {
         'company': Company.objects.first(),
@@ -305,7 +310,10 @@ def _production_order_context(order_pk):
         'size_count': len(size_headers),
         'matrix_rows': matrix_rows,
         'grand_total': grand_total,
-        'group_rows': group_rows,
+        'printing_rows': printing_rows,
+        'operation_rows': operation_rows,
+        'quality_rows': quality_rows,
+        'ironing_rows': ironing_rows,
         'stage_totals': stage_totals,
         'fabric_rows': fabric_rows,
         'fabric_total_before': fabric_total_before,

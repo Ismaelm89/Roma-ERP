@@ -48,10 +48,15 @@ table.grid tfoot td { background:#f6f8fb; font-weight:700; }
 /* خانات "الفعلي" اللي المشرفين بيملوها بخط إيدهم وقت تسليم الخطة. */
 .fill { background:#fff3bf !important; border:1px dashed #d9a400 !important; }
 .fill-cell { height:20px; }
-/* جدول مراحل الشغل: أعمدة المراحل ضيّقة، وعمود الملاحظات واسع زي ما هو. */
-.grp { table-layout:fixed; }
-.grp th, .grp td { padding:4px 4px; }
-.grp tbody td { height:26px; }
+/* مراحل الشغل الأربعة: التشغيل (15 صف) جدول كبير شمال، والطباعة/الجودة/الكوي
+   (5 صفوف لكل واحدة) جداول صغيرة فوق بعض على يمينه. العناوين مرقّمة 1-4
+   عشان الترتيب يفضل واضح. */
+.stages { display:flex; gap:12px; align-items:flex-start; }
+.stages-side { flex:0 0 34%; max-width:34%; display:flex; flex-direction:column; gap:10px; }
+.stages-main { flex:1 1 auto; min-width:0; }
+.stg-t { font-weight:700; color:var(--brand); font-size:13px; margin:0 0 3px; }
+table.stg tbody td { height:22px; }
+table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
 .fill-note { background:#fff8e1; border:1px solid #f0d264; border-radius:6px;
              padding:6px 10px; margin:6px 0; font-size:11px; color:#92600a; }
 .fill-note b { color:#7a4f00; }
@@ -94,8 +99,14 @@ table.grid tfoot td { background:#f6f8fb; font-weight:700; }
        تتظبط في عرض الورقة الطولية. */
     table.grid { font-size:7px; }
     table.grid th, table.grid td { padding:1px 1px; line-height:1.15; }
-    .grp th, .grp td { padding:2px 2px; }
-    .grp tbody td { height:17px; }
+    /* جداول مراحل الشغل الأربعة: صفوف قصيرة عشان الـ 30 صف (5+15+5+5) يدخلوا
+       في باقي الصفحة الواحدة. */
+    .stages { gap:8px; }
+    .stages-side { gap:5px; }
+    .stg-t { font-size:9px; margin:0 0 1px; }
+    table.stg { font-size:8px; }
+    table.stg th, table.stg td { padding:1px 4px; }
+    table.stg tbody td { height:12.5px; }
     .fill-note { padding:3px 7px; margin:3px 0; font-size:9px; }
     .consume { gap:8px; }
     /* الصورة مقصوصة الارتفاع عشان تقعد جنب جداول القماش/الإكسسوار من غير ما تزوّد طول الصفحة. */
@@ -122,7 +133,7 @@ table.grid tfoot td { background:#f6f8fb; font-weight:700; }
 
     {% if plan_stage %}
     <div class="fill-note">
-        ✍️ صفوف <b>مجموعات ومراحل الشغل</b> الفاضية يملاها مشرفو الإنتاج بخط اليد.
+        ✍️ صفوف <b>جداول مراحل الشغل</b> الفاضية يملاها مشرفو الإنتاج بخط اليد.
         القماش والإكسسوارات محسوبين <b>تلقائياً</b> من وصفة المنتج — مفيش إدخال يدوي.
     </div>
     {% endif %}
@@ -302,61 +313,77 @@ table.grid tfoot td { background:#f6f8fb; font-weight:700; }
         </div>
     </div>
 
-    {# ---------- مجموعات ومراحل الشغل (تشغيل / تشطيب / جودة / كوي) ---------- #}
-    {# 5 صفوف على الأقل: المملوء + الباقي فاضي يملاه المشرفون بخط اليد. #}
-    <h2>مجموعات ومراحل الشغل</h2>
-    <table class="std grp">
-        <colgroup>
-            <col style="width:4%;">
-            <col style="width:9%;"><col style="width:5%;">
-            <col style="width:9%;"><col style="width:5%;">
-            <col style="width:9%;"><col style="width:5%;">
-            <col style="width:9%;"><col style="width:5%;">
-            <col style="width:40%;">
-        </colgroup>
-        <thead>
-            <tr>
-                <th rowspan="2">#</th>
-                <th colspan="2">التشغيل</th>
-                <th colspan="2">التشطيب</th>
-                <th colspan="2">الجودة</th>
-                <th colspan="2">الكوي</th>
-                <th rowspan="2">ملاحظات</th>
-            </tr>
-            <tr>
-                <th>المجموعة</th><th class="num">كمية</th>
-                <th>المجموعة</th><th class="num">كمية</th>
-                <th>المجموعة</th><th class="num">كمية</th>
-                <th>المجموعة</th><th class="num">كمية</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for g in group_rows %}
-            <tr>
-                <td><b>{{ forloop.counter }}</b></td>
-                <td>{{ g.sewing_group }}</td>
-                <td class="num">{{ g.sewing_qty }}</td>
-                <td>{{ g.finishing_group }}</td>
-                <td class="num">{{ g.finishing_qty }}</td>
-                <td>{{ g.quality_group }}</td>
-                <td class="num">{{ g.quality_qty }}</td>
-                <td>{{ g.ironing_group }}</td>
-                <td class="num">{{ g.ironing_qty }}</td>
-                <td class="muted">{{ g.notes }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-        <tfoot>
-            <tr>
-                <th>الإجمالي</th>
-                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.0.match %}color:#b91c1c;{% endif %}">{{ stage_totals.0.total }}</th>
-                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.1.match %}color:#b91c1c;{% endif %}">{{ stage_totals.1.total }}</th>
-                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.2.match %}color:#b91c1c;{% endif %}">{{ stage_totals.2.total }}</th>
-                <th></th><th class="num" style="border-top:2px solid var(--ink);{% if not stage_totals.3.match %}color:#b91c1c;{% endif %}">{{ stage_totals.3.total }}</th>
-                <th>إجمالي القطع = {{ grand_total }}</th>
-            </tr>
-        </tfoot>
-    </table>
+    {# ---------- مراحل الشغل الأربعة: 1) الطباعة 2) التشغيل 3) الجودة 4) الكوي ---------- #}
+    {# كل مرحلة جدول مستقل (5 / 15 / 5 / 5 صفوف): المملوء + الباقي فاضي يملاه المشرفون بخط اليد. #}
+    <h2>مراحل الشغل</h2>
+    <div class="stages">
+        <div class="stages-side">
+            <div>
+                <div class="stg-t">1) مرحلة الطباعة</div>
+                <table class="std stg">
+                    <thead><tr><th style="width:8%;">#</th><th>الصنايعي</th><th class="num" style="width:28%;">الكمية</th></tr></thead>
+                    <tbody>
+                    {% for r in printing_rows %}
+                        <tr><td>{{ forloop.counter }}</td><td>{{ r.worker }}</td><td class="num">{{ r.qty }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot><tr><th colspan="2">الإجمالي</th><th class="num" {% if not stage_totals.0.match %}style="color:#b91c1c;"{% endif %}>{{ stage_totals.0.total }}</th></tr></tfoot>
+                </table>
+            </div>
+            <div>
+                <div class="stg-t">3) مرحلة الجودة</div>
+                <table class="std stg">
+                    <thead><tr><th style="width:8%;">#</th><th>الصنايعي</th><th class="num" style="width:28%;">الكمية</th></tr></thead>
+                    <tbody>
+                    {% for r in quality_rows %}
+                        <tr><td>{{ forloop.counter }}</td><td>{{ r.worker }}</td><td class="num">{{ r.qty }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot><tr><th colspan="2">الإجمالي</th><th class="num" {% if not stage_totals.2.match %}style="color:#b91c1c;"{% endif %}>{{ stage_totals.2.total }}</th></tr></tfoot>
+                </table>
+            </div>
+            <div>
+                <div class="stg-t">4) مرحلة الكوي</div>
+                <table class="std stg">
+                    <thead><tr><th style="width:8%;">#</th><th>الصنايعي</th><th class="num" style="width:28%;">الكمية</th></tr></thead>
+                    <tbody>
+                    {% for r in ironing_rows %}
+                        <tr><td>{{ forloop.counter }}</td><td>{{ r.worker }}</td><td class="num">{{ r.qty }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot><tr><th colspan="2">الإجمالي</th><th class="num" {% if not stage_totals.3.match %}style="color:#b91c1c;"{% endif %}>{{ stage_totals.3.total }}</th></tr></tfoot>
+                </table>
+            </div>
+        </div>
+        <div class="stages-main">
+            <div class="stg-t">2) مراحل التشغيل</div>
+            <table class="std stg">
+                <thead>
+                    <tr>
+                        <th style="width:6%;">#</th>
+                        <th style="width:12%;">رقم المرحلة</th>
+                        <th>اسم المرحلة</th>
+                        <th style="width:20%;">المكنة</th>
+                        <th style="width:22%;">الصنايعي</th>
+                        <th class="num" style="width:12%;">الكمية</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in operation_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ r.stage_no }}</td>
+                        <td>{{ r.stage_name }}</td>
+                        <td>{{ r.machine }}</td>
+                        <td>{{ r.worker }}</td>
+                        <td class="num">{{ r.qty }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot><tr><th colspan="5">الإجمالي</th><th class="num" {% if not stage_totals.1.match %}style="color:#b91c1c;"{% endif %}>{{ stage_totals.1.total }}</th></tr></tfoot>
+            </table>
+        </div>
+    </div>
     <p class="muted" style="font-size:11px;">كل مرحلة المفروض مجموع كمياتها = إجمالي القطع ({{ grand_total }}). أي رقم بالأحمر معناه مش مطابق.</p>
 
 </div>
