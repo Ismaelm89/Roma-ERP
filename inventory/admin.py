@@ -1,14 +1,17 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
 
-from core.admin_mixins import StayOnPageMixin
+from core.admin_mixins import StayOnPageMixin, LockAfterPostMixin
 from core.templatetags.money_filters import fmt_money
 
 from manufacturing.models import ProductSizeRecipe
 
-from .models import Item, ItemVariant, Product, StockMovement
+from .models import (Item, ItemVariant, Product, StockMovement,
+                     FinishedGoodsPurchaseInvoice, FinishedGoodsPurchaseLine)
+from .services import (post_finished_goods_purchase_invoice,
+                       FinishedGoodsPostingError)
 
 
 class ItemVariantForm(forms.ModelForm):
@@ -32,18 +35,33 @@ class ItemVariantForm(forms.ModelForm):
 
 
 class ItemVariantInline(admin.TabularInline):
-    """SKUs (المقاسات) — للعرض فقط. بتتولّد تلقائياً من وصفة المنتج الرئيسي،
-    والسعر بييجي من الوصفة برضه. التعديل بيتم على وصفة المنتج الرئيسي."""
+    """SKUs (المقاسات).
+
+    منتج مُصنّع (له منتج رئيسي): للعرض فقط — المقاسات والسعر بييجوا من وصفة المنتج الرئيسي.
+    منتج تجاري (من غير منتج رئيسي): قابل للإضافة والتعديل — تكتب المقاس وسعر البيع بإيدك،
+    والتكلفة بتتحدّد من فاتورة شراء المنتجات التامة (متوسط مرجّح)."""
     model = ItemVariant
+    form = ItemVariantForm
     extra = 0
-    can_delete = False
-    fields = ('size', 'sku_code', 'selling_price', 'dozen_price_col',
-              'current_stock', 'average_cost', 'barcode', 'reorder_level')
-    readonly_fields = ('size', 'sku_code', 'selling_price', 'dozen_price_col',
-                       'current_stock', 'average_cost', 'barcode', 'reorder_level')
+    # full read-only set (manufactured item) vs editable set (trading item)
+    _ALL = ('size', 'sku_code', 'selling_price', 'dozen_price_col',
+            'current_stock', 'average_cost', 'barcode', 'reorder_level')
+    _COMPUTED = ('sku_code', 'dozen_price_col', 'current_stock', 'average_cost')
+    fields = _ALL
+
+    @staticmethod
+    def _is_trading(obj):
+        # New item (obj=None) or an item with no main product → trading (editable).
+        return obj is None or obj.product_id is None
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return self._is_trading(obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._is_trading(obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        return self._COMPUTED if self._is_trading(obj) else self._ALL
 
     def dozen_price_col(self, obj):
         if obj and obj.pk and obj.selling_price:
@@ -193,3 +211,88 @@ class StockMovementAdmin(admin.ModelAdmin):
     autocomplete_fields = ('variant',)
     date_hierarchy = 'date'
     readonly_fields = ('created_at', 'created_by')
+
+
+# ============================================================
+#  Finished-goods (trading) purchase invoice
+# ============================================================
+class FinishedGoodsPurchaseLineInline(admin.TabularInline):
+    model = FinishedGoodsPurchaseLine
+    extra = 1
+    autocomplete_fields = ('variant',)
+    fields = ('variant', 'quantity', 'unit_cost', 'line_total_display', 'is_posted')
+    readonly_fields = ('line_total_display', 'is_posted')
+
+    def line_total_display(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.total_cost)} ج'
+    line_total_display.short_description = 'إجمالي البند'
+
+
+@admin.register(FinishedGoodsPurchaseInvoice)
+class FinishedGoodsPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin):
+    lock_field = 'is_posted'
+    unlock_always = ('notes',)
+    list_display = ('invoice_no', 'supplier', 'date', 'payment_method',
+                    'total_col', 'is_posted')
+    list_filter = ('is_posted', 'payment_method', 'date', 'supplier')
+    search_fields = ('invoice_no', 'supplier_ref', 'supplier__name', 'notes')
+    date_hierarchy = 'date'
+    autocomplete_fields = ('supplier', 'cash_account')
+    readonly_fields = ('invoice_no', 'is_posted', 'journal_entry',
+                       'total_display', 'created_at')
+    fieldsets = (
+        ('بيانات الفاتورة', {
+            'fields': ('invoice_no', 'supplier', 'supplier_ref', 'date'),
+        }),
+        ('الدفع', {
+            'fields': ('payment_method', 'cash_account'),
+            'description': 'مدفوع: اختار الخزينة/البنك/المحفظة. آجل: اختار المورد '
+                           '(هيتسجّل في رصيده).',
+        }),
+        ('الإجمالي', {'fields': ('total_display', 'is_posted', 'journal_entry')}),
+        ('ملاحظات', {'fields': ('notes', 'created_at')}),
+    )
+    inlines = [FinishedGoodsPurchaseLineInline]
+    actions = ('action_post',)
+
+    def total_col(self, obj):
+        return f'{fmt_money(obj.total)} ج'
+    total_col.short_description = 'الإجمالي'
+
+    def total_display(self, obj):
+        if not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.total)} جنيه'
+    total_display.short_description = 'إجمالي الفاتورة'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def save_formset(self, request, form, formset, change):
+        if formset.model is FinishedGoodsPurchaseLine:
+            inv = form.instance
+            instances = formset.save(commit=False)
+            for inst in instances:
+                inst.invoice = inv
+                inst.save()
+            for obj in formset.deleted_objects:
+                obj.delete()
+            formset.save_m2m()
+        else:
+            super().save_formset(request, form, formset, change)
+
+    @admin.action(description='ترحيل المختار (قيد محاسبي واحد + زيادة أرصدة المنتجات)')
+    def action_post(self, request, queryset):
+        ok = 0
+        for inv in queryset:
+            try:
+                post_finished_goods_purchase_invoice(inv, user=request.user)
+                ok += 1
+            except FinishedGoodsPostingError as e:
+                self.message_user(request, f'{inv.invoice_no}: {e}', level=messages.ERROR)
+        if ok:
+            self.message_user(request, f'تم ترحيل {ok} فاتورة.', level=messages.SUCCESS)

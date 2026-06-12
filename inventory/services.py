@@ -67,3 +67,84 @@ def post_opening_balance(variant, quantity, unit_cost, date=None, user=None, not
     )
     je.recalc_totals()
     return mv, je
+
+
+# ------------------------------------------------------------------ Finished-goods purchase
+class FinishedGoodsPostingError(Exception):
+    """Business-rule failure surfaced to the user when posting a goods purchase."""
+
+
+@transaction.atomic
+def post_finished_goods_purchase_invoice(invoice, user=None):
+    """Post a multi-line finished-goods (trading) purchase as ONE balanced JE:
+        DR  Inventory                       grand total (one line per SKU)
+        CR  Cash account / AP(supplier)      grand total (single line)
+    Each line raises its SKU's stock + WAC via a PURCHASE_IN StockMovement.
+    """
+    from core.models import JournalEntry, JournalLine
+    if invoice.is_posted:
+        raise FinishedGoodsPostingError(f'الفاتورة {invoice.invoice_no} مرحّلة من قبل.')
+    lines = list(invoice.lines.select_related('variant', 'variant__item').all())
+    if not lines:
+        raise FinishedGoodsPostingError('أضف بند واحد على الأقل قبل الترحيل.')
+    if invoice.payment_method == 'CASH' and not invoice.cash_account_id:
+        raise FinishedGoodsPostingError('اختار حساب الدفع (نقدية/بنك/محفظة) للفاتورة.')
+    if invoice.payment_method == 'CREDIT' and not invoice.supplier_id:
+        raise FinishedGoodsPostingError('اختار المورد للفاتورة الآجلة.')
+    for p in lines:
+        if p.is_posted:
+            raise FinishedGoodsPostingError(f'البند {p.variant} مرحّل من قبل — راجع الفاتورة.')
+        if Decimal(p.quantity or 0) <= 0:
+            raise FinishedGoodsPostingError(f'{p.variant}: الكمية لازم تكون أكبر من صفر.')
+        if Decimal(p.unit_cost or 0) < 0:
+            raise FinishedGoodsPostingError(f'{p.variant}: تكلفة الوحدة لا يمكن أن تكون سالبة.')
+
+    inv_acct = get_system_account('INVENTORY')
+    je = JournalEntry.objects.create(
+        date=invoice.date,
+        reference=invoice.invoice_no,
+        description=f'فاتورة شراء منتجات تامة {invoice.invoice_no}',
+        status='POSTED',
+        source_doc_type='FinishedGoodsPurchaseInvoice',
+        source_doc_id=invoice.id,
+        created_by=user,
+    )
+    grand_total = Decimal('0')
+    for p in lines:
+        qty = Decimal(p.quantity)
+        cost = Decimal(p.unit_cost)
+        line_total = _q(qty * cost)
+        grand_total += line_total
+        mv = StockMovement.objects.create(
+            variant=p.variant, date=invoice.date, movement_type='PURCHASE_IN',
+            quantity=qty, unit_cost=cost,
+            document_type='FinishedGoodsPurchase', document_id=invoice.id,
+            notes=f'شراء منتج تام — فاتورة {invoice.invoice_no}', created_by=user,
+        )
+        mv.apply_to_variant()
+        JournalLine.objects.create(
+            entry=je, account=inv_acct, debit=line_total, credit=Decimal('0'),
+            variant=p.variant, description=f'{p.variant} × {qty}',
+        )
+        p.is_posted = True
+        p.save(update_fields=['is_posted'])
+
+    if invoice.payment_method == 'CASH':
+        credit_acct = invoice.cash_account.gl_account
+        credit_desc = f'دفع من {invoice.cash_account.name} — فاتورة {invoice.invoice_no}'
+        credit_supplier = None
+    else:
+        credit_acct = get_system_account('AP')
+        credit_desc = f'شراء آجل من {invoice.supplier.name} — فاتورة {invoice.invoice_no}'
+        credit_supplier = invoice.supplier
+    JournalLine.objects.create(
+        entry=je, account=credit_acct, debit=Decimal('0'), credit=_q(grand_total),
+        description=credit_desc, supplier=credit_supplier,
+    )
+    je.recalc_totals()
+    assert je.total_debit == je.total_credit, 'finished-goods invoice JE unbalanced'
+
+    invoice.is_posted = True
+    invoice.journal_entry = je
+    invoice.save(update_fields=['is_posted', 'journal_entry'])
+    return je

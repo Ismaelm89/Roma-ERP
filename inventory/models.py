@@ -264,3 +264,83 @@ class StockMovement(models.Model):
         else:
             v.current_stock = v.current_stock - qty
         v.save(update_fields=['current_stock', 'average_cost'])
+
+
+class FinishedGoodsPurchaseInvoice(models.Model):
+    """فاتورة شراء منتجات تامة جاهزة (تجارة) — هيدر واحد (مورد + رقم + تاريخ + دفع)
+    وتحته كذا بند (FinishedGoodsPurchaseLine لكل SKU).
+
+    الترحيل بيعمل قيد محاسبي **واحد** للفاتورة كلها:
+        DR  المخزون (منتجات تامة)        إجمالي البنود
+        CR  نقدية/بنك/محفظة أو مورد آجل   إجمالي البنود
+    وكل بند بيزوّد رصيد الـ SKU ويحدّث متوسط تكلفته (WAC) بحركة PURCHASE_IN.
+    البيع بعد كده بيشتغل عادي (COGS من متوسط التكلفة).
+    """
+    PAYMENT_CHOICES = [
+        ('CASH', 'مدفوع (نقدية/بنك/محفظة)'),
+        ('CREDIT', 'آجل (على المورد)'),
+    ]
+
+    invoice_no = models.CharField('رقم الفاتورة', max_length=30, unique=True, blank=True,
+                                  help_text='سيب الخانة فاضية وهيتولّد تلقائياً (FGP-0001 ...)')
+    supplier = models.ForeignKey('manufacturing.Supplier', null=True, blank=True,
+                                 on_delete=models.PROTECT, related_name='finished_goods_invoices',
+                                 verbose_name='المورد',
+                                 limit_choices_to={'vendor_type__code': 'FINISHED_GOODS'},
+                                 help_text='إجباري لو الفاتورة آجلة')
+    supplier_ref = models.CharField('رقم فاتورة المورد', max_length=50, blank=True,
+                                    help_text='رقم الفاتورة الورقية اللي جايه من المورد (اختياري)')
+    date = models.DateField('تاريخ الفاتورة')
+    payment_method = models.CharField('طريقة الدفع', max_length=10,
+                                      choices=PAYMENT_CHOICES, default='CASH')
+    cash_account = models.ForeignKey('core.CashAccount', null=True, blank=True,
+                                     on_delete=models.PROTECT, related_name='finished_goods_invoices',
+                                     verbose_name='مدفوع من (لو مدفوع)',
+                                     help_text='اختار الخزينة/البنك/المحفظة لو الدفع مش آجل')
+    is_posted = models.BooleanField('مرحّلة محاسبياً', default=False, editable=False)
+    journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+', editable=False)
+    notes = models.TextField('ملاحظات', blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'فاتورة شراء منتجات تامة'
+        verbose_name_plural = 'مشتريات المنتجات التامة (تجارة)'
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return self.invoice_no or f'FGP-{self.pk}'
+
+    def save(self, *args, **kwargs):
+        from core.serials import assign_if_blank
+        assign_if_blank(self, 'invoice_no', 'FGP-', 4)
+        super().save(*args, **kwargs)
+
+    @property
+    def total(self):
+        return sum((l.total_cost for l in self.lines.all()), Decimal('0'))
+
+
+class FinishedGoodsPurchaseLine(models.Model):
+    """بند في فاتورة شراء منتجات تامة — SKU واحد بكمية وتكلفة."""
+    invoice = models.ForeignKey(FinishedGoodsPurchaseInvoice, on_delete=models.CASCADE,
+                                related_name='lines', verbose_name='الفاتورة')
+    variant = models.ForeignKey(ItemVariant, on_delete=models.PROTECT,
+                                related_name='purchase_lines', verbose_name='المنتج (SKU)')
+    quantity = models.DecimalField('الكمية', max_digits=12, decimal_places=2)
+    unit_cost = models.DecimalField('تكلفة الوحدة', max_digits=12, decimal_places=4)
+    is_posted = models.BooleanField('مرحّل', default=False, editable=False)
+
+    class Meta:
+        verbose_name = 'بند منتج تام'
+        verbose_name_plural = 'بنود المنتجات التامة'
+
+    def __str__(self):
+        return f'{self.variant} × {self.quantity}'
+
+    @property
+    def total_cost(self):
+        return (Decimal(self.quantity or 0)
+                * Decimal(self.unit_cost or 0)).quantize(Decimal('0.01'))
