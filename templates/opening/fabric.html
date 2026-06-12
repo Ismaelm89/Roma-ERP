@@ -80,6 +80,7 @@
 
     <div class="ob-actions no-print">
         <button class="btn" type="submit">💾 حفظ أرصدة الأقمشة</button>
+        <button type="button" class="btn secondary" id="add-fab-row">+ إضافة سطر</button>
         <a class="btn secondary" href="{% url 'opening:assets' %}">التالي: الأصول ⟵</a>
     </div>
     {% else %}
@@ -112,6 +113,26 @@
     document.querySelectorAll('#fab-table .fab-qty, #fab-table .fab-cost')
         .forEach(function (el) { el.addEventListener('input', recalc); });
     recalc();
+
+    document.getElementById('add-fab-row').addEventListener('click', function () {
+        var tbody = document.querySelector('#fab-table tbody');
+        var rows = tbody.querySelectorAll('tr');
+        var idx = rows.length;
+        var tpl = rows[rows.length - 1].cloneNode(true);
+        // update all name= attributes to new index
+        tpl.querySelectorAll('[name]').forEach(function (el) {
+            el.name = el.name.replace(/_\d+$/, '_' + idx);
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+            else el.value = '';
+        });
+        tpl.querySelector('.fab-value').textContent = '—';
+        tpl.querySelectorAll('.fab-qty, .fab-cost').forEach(function (el) {
+            el.addEventListener('input', recalc);
+        });
+        tbody.appendChild(tpl);
+        // update hidden row_count
+        document.querySelector('input[name="row_count"]').value = idx + 1;
+    });
 })();
 </script>
 {% endblock %}
