@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>أمر إنتاج {{ order.order_no }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,6 +71,21 @@ table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
                  border:1px solid var(--line); border-radius:6px; padding:4px; background:#fff; }
 .no-img { border:1px dashed var(--line); border-radius:6px; padding:30px 8px;
           text-align:center; color:var(--muted); }
+/* موبايل (عرض الشاشة فقط — الطباعة زي ما هي): جدول المقاسات العريض بيتسحب
+   أفقياً، وجداول القماش/الصورة/مراحل الشغل بتتراص عمود واحد. */
+@media screen and (max-width: 768px) {
+    body { padding: 6px; }
+    .toolbar { flex-wrap: wrap; gap: 6px; }
+    .sheet { padding: 8px; overflow-x: hidden; }
+    .grid-wrap, .sheet { -webkit-overflow-scrolling: touch; }
+    table.grid { display: block; overflow-x: auto; white-space: nowrap; }
+    .consume { flex-direction: column; }
+    .model-img { flex: 1 1 auto; max-width: 100%; }
+    .stages { flex-direction: column; }
+    .stages-side { flex: 1 1 auto; max-width: 100%; }
+    .info { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
 @media print {
     /* الطباعة بقت "طولي" (Portrait) — مش عرضي — عشان سببين:
        (1) إن الطابعة الافتراضية في ويندوز (و"Microsoft Print to PDF") بتطبع طولي،

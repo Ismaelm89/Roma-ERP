@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roma ERP — لوحة التحكم</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -211,6 +212,20 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px
 }
 .chart-card canvas {
     max-height: 260px;
+}
+
+/* موبايل: الهيدر بيلف، حشو أصغر، الرسوم عمود واحد، والجداول بتتسحب أفقياً. */
+@media (max-width: 768px) {
+    header.topbar { padding: 10px 14px; flex-wrap: wrap; gap: 6px; }
+    header.topbar h1 { font-size: 16px; }
+    header.topbar nav a { margin-inline-start: 10px; font-size: 12px; }
+    .container { padding: 12px 10px 40px; }
+    .kpi .value { font-size: 19px; }
+    .charts { grid-template-columns: 1fr; }
+    .actions a { padding: 9px 12px; font-size: 12px; }
+    .card { padding: 12px 10px; overflow-x: auto; }
+    .card table { display: block; overflow-x: auto; white-space: nowrap;
+                  -webkit-overflow-scrolling: touch; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>

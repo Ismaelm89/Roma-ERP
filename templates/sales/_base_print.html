@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Roma ERP{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -90,6 +91,20 @@ td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
     border-top: 1px dashed var(--line);
     color: var(--muted);
     font-size: 12px;
+}
+
+/* موبايل: حشو أصغر + الجداول العريضة بتتسحب أفقياً جوّه الصفحة بدل ما تكسر الشاشة. */
+@media screen and (max-width: 768px) {
+    body { padding: 8px; font-size: 13px; }
+    .toolbar { flex-wrap: wrap; gap: 6px; }
+    .btn { padding: 8px 12px; font-size: 13px; }
+    .page { padding: 14px 10px; border-radius: 6px; }
+    h1 { font-size: 18px; }
+    table { display: block; overflow-x: auto; white-space: nowrap;
+            -webkit-overflow-scrolling: touch; }
+    th, td { padding: 6px 8px; }
+    .header-grid { grid-template-columns: 1fr; }
+    .meta-block { text-align: right; }
 }
 
 @media print {
