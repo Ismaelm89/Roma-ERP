@@ -720,7 +720,7 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
     change_form_template = 'admin/manufacturing/productionorder/change_form.html'
 
     class Media:
-        js = ('manufacturing/submodel_sync.js',)
+        js = ('manufacturing/submodel_sync.js', 'manufacturing/stage_autonumber.js')
 
     def status_col(self, obj):
         colors = {
