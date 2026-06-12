@@ -656,17 +656,27 @@ class ProductionOrder(models.Model):
         return total.quantize(Decimal('0.01'))
 
     def recipe_accessory_plan(self):
-        """{accessory_id: الكمية المخططة} من الوصفة (مجموع كل المقاسات × قطعها)."""
+        """{accessory_id: الكمية المخططة بالهالك} من الوصفة.
+
+        الأساس = مجموع (كمية الوصفة × قطع المقاس)، وبعدها بنطبّق نسبة هالك
+        الإكسسوار نفسه: الكمية المخططة = الأساس × (1 + هالك الإكسسوار %)."""
         recipes = self._recipe_by_size()
-        plan = {}
+        base = {}
         for sid, qty in self._pieces_by_size().items():
             r = recipes.get(sid)
             if not r:
                 continue
             for line in r.accessories.all():
-                plan[line.accessory_id] = (plan.get(line.accessory_id, Decimal('0'))
+                base[line.accessory_id] = (base.get(line.accessory_id, Decimal('0'))
                                            + Decimal(line.qty_per_piece or 0) * Decimal(qty))
-        return plan
+        if not base:
+            return base
+        waste = dict(Accessory.objects.filter(id__in=base.keys())
+                     .values_list('id', 'waste_pct'))
+        return {
+            acc_id: qty * (Decimal('1') + Decimal(waste.get(acc_id) or 0) / Decimal('100'))
+            for acc_id, qty in base.items()
+        }
 
     @property
     def recipe_sizes_without_recipe(self):
@@ -725,7 +735,10 @@ class ProductionOrder(models.Model):
             fab_w = Decimal(r.fabric_qty_kg or 0) * Decimal(qty)
             acc_w = Decimal('0')
             for line in r.accessories.all():
-                acc_w += (Decimal(line.qty_per_piece or 0) * Decimal(qty)
+                acc_waste = (Decimal('1')
+                             + Decimal(getattr(line.accessory, 'waste_pct', 0) or 0)
+                             / Decimal('100'))
+                acc_w += (Decimal(line.qty_per_piece or 0) * Decimal(qty) * acc_waste
                           * self._accessory_unit_cost(line.accessory))
             labor = (Decimal(r.labor_cost or 0) * Decimal(qty)).quantize(Decimal('0.01'))
             rows[sid] = {'size': r.size, 'code': r.size.code, 'qty': qty,
@@ -966,6 +979,10 @@ class Accessory(models.Model):
                                               default=Decimal('0'),
                                               help_text='سعر استرشادي — التكلفة الفعلية بتيجي من '
                                                         'متوسط تكلفة المشتريات')
+    waste_pct = models.DecimalField('نسبة الهالك %', max_digits=5, decimal_places=2,
+                                    default=Decimal('5'),
+                                    help_text='نسبة الزيادة على استهلاك الإكسسوار بسبب الهالك. '
+                                              'مثال: 5 يعني الكمية المستهلكة = كمية الوصفة × 1.05.')
     current_stock = models.DecimalField('الرصيد الحالي', max_digits=14, decimal_places=3,
                                          default=Decimal('0'), editable=False)
     average_cost = models.DecimalField('متوسط التكلفة', max_digits=12, decimal_places=4,
