@@ -60,7 +60,7 @@
     {% for row in batches %}
         <tr>
             <td><b>{{ row.b.batch_no }}</b></td>
-            <td>{{ row.b.supplier.name }}</td>
+            <td>{{ row.b.supplier.name|default:"—" }}</td>
             <td>{{ row.b.fabric_type.name_ar }}</td>
             <td>
                 {% if row.b.color.hex_code %}

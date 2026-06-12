@@ -29,7 +29,7 @@ def fabric_on_hand(request):
 
     for b in qs:
         in_stock = Decimal(b.in_stock_qty_kg)
-        at_dyer = Decimal(b.at_dyer_qty_kg)
+        at_dyer = Decimal('0')
         remaining = in_stock + at_dyer
         if remaining <= 0:
             continue
