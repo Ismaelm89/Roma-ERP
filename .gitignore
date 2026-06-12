@@ -64,3 +64,6 @@ _study/
 _workflows/
 # Any root-level underscore-prefixed scratch script (NOT subdir __init__.py — anchored to root)
 /_*.py
+
+# --- Data migration dumps (contain password hashes) ---
+data_dump*.json
