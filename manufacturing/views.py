@@ -64,7 +64,11 @@ def accessories_on_hand(request):
             continue
         avg = Decimal(a.average_cost or 0)
         value = (stock * avg).quantize(Decimal('0.01'))
-        rows.append({'a': a, 'stock': stock, 'avg_cost': avg, 'value': value})
+        rows.append({
+            'a': a, 'stock': stock, 'avg_cost': avg, 'value': value,
+            'stock_purchase': a.stock_in_purchase_unit,
+            'cost_purchase': a.cost_per_purchase_unit,
+        })
         total_value += value
 
     context = {

@@ -979,11 +979,21 @@ class ProductionSubModelAdmin(admin.ModelAdmin):
 
 @admin.register(Accessory)
 class AccessoryAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name_ar', 'unit', 'current_stock', 'average_cost',
-                    'default_unit_cost', 'buy_link', 'active')
-    list_filter = ('active', 'unit')
+    list_display = ('code', 'name_ar', 'purchase_unit', 'unit', 'units_per_purchase',
+                    'current_stock', 'average_cost', 'buy_link', 'active')
+    list_filter = ('active', 'unit', 'purchase_unit')
     search_fields = ('code', 'name_ar', 'notes')
     readonly_fields = ('code', 'current_stock', 'average_cost', 'created_at')
+    fieldsets = (
+        ('بيانات الصنف', {'fields': ('code', 'name_ar', 'active')}),
+        ('الوحدات والتحويل', {
+            'fields': ('purchase_unit', 'unit', 'units_per_purchase', 'conversion_note',
+                       'default_unit_cost'),
+            'description': 'بتشتري بوحدة الشراء وتستهلك بوحدة الاستهلاك. المعدل = كام وحدة '
+                           'استهلاك في وحدة الشراء الواحدة (لو الوحدتين نفس الوحدة سيبه 1).'}),
+        ('الرصيد (بوحدة الاستهلاك)', {'fields': ('current_stock', 'average_cost')}),
+        ('المورد وملاحظات', {'fields': ('supplier', 'notes', 'created_at')}),
+    )
 
     def buy_link(self, obj):
         if not obj.pk:

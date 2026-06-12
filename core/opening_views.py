@@ -186,8 +186,14 @@ def accessories(request):
         ob_date = _parse_date(request.POST.get('ob_date'))
         rows = []
         for a in accs:
-            qty = _dec(request.POST.get(f'qty_{a.id}'))
-            cost = _dec(request.POST.get(f'cost_{a.id}'))
+            # المُدخل بوحدة الشراء — نحوّله لوحدة الاستهلاك قبل الترحيل.
+            qty_p = _dec(request.POST.get(f'qty_{a.id}'))
+            cost_p = _dec(request.POST.get(f'cost_{a.id}'))
+            factor = Decimal(a.units_per_purchase or 0)
+            if factor <= 0:
+                factor = Decimal('1')
+            qty = qty_p * factor                 # consumption units
+            cost = (cost_p / factor) if factor else cost_p
             rows.append((a, qty, cost))
         try:
             post_accessories_opening(rows, date=ob_date)
@@ -198,6 +204,7 @@ def accessories(request):
 
     # prefill: الإكسسوارات اللي ليها بند في قيد الافتتاح بترجّع كميتها وتكلفتها الحالية
     # (الافتتاح بيكتبهم مباشرة على الصنف، والحارس بيمنع أي حركة تانية تغيّرهم).
+    # المخزون مخزّن بوحدة الاستهلاك → نرجّعه لوحدة الشراء للعرض.
     opened = set(JournalLine.objects
                  .filter(entry__source_doc_type=SRC['accessories'])
                  .exclude(accessory__isnull=True)
@@ -207,8 +214,8 @@ def accessories(request):
         on = a.id in opened
         rows.append({
             'a': a,
-            'qty': _fmt(a.current_stock) if on else '',
-            'cost': _fmt(a.average_cost) if on else (_fmt(a.default_unit_cost) or ''),
+            'qty': _fmt(a.stock_in_purchase_unit) if on else '',
+            'cost': _fmt(a.cost_per_purchase_unit) if on else (_fmt(a.default_unit_cost) or ''),
         })
     return render(request, 'opening/accessories.html', {
         'active': 'accessories', 'rows': rows,

@@ -972,8 +972,19 @@ class Accessory(models.Model):
     code = models.CharField('كود الإكسسوار', max_length=20, unique=True, blank=True,
                              help_text='سيب الخانة فاضية وهيتولّد تلقائياً (ACC-0001 ...)')
     name_ar = models.CharField('اسم الإكسسوار', max_length=200)
-    unit = models.CharField('وحدة القياس', max_length=20, choices=UNIT_CHOICES, default='قطعة',
-                              help_text='اختار وحدة القياس من القائمة')
+    unit = models.CharField('وحدة الاستهلاك', max_length=20, choices=UNIT_CHOICES, default='قطعة',
+                              help_text='الوحدة اللي بتستهلك بيها في الإنتاج (المخزون والتكلفة محسوبين بيها)')
+    purchase_unit = models.CharField('وحدة الشراء', max_length=20, choices=UNIT_CHOICES,
+                                      default='قطعة',
+                                      help_text='الوحدة اللي بتشتري بيها من المورد')
+    units_per_purchase = models.DecimalField('المعدل (وحدات استهلاك لكل وحدة شراء)',
+                                              max_digits=12, decimal_places=4, default=Decimal('1'),
+                                              help_text='كام وحدة استهلاك في وحدة الشراء الواحدة. '
+                                                        'مثال: بتشتري بالكيلو وتستهلك بالمتر والمتر '
+                                                        'وزنه 100 جرام → 1000÷100 = 10 متر في الكيلو. '
+                                                        'لو الوحدتين نفس الوحدة سيبها 1.')
+    conversion_note = models.CharField('شرح المعدل', max_length=200, blank=True,
+                                        help_text='توضيح اختياري، مثال: «وزن المتر 100 جرام»')
     default_unit_cost = models.DecimalField('سعر الوحدة', max_digits=12, decimal_places=4,
                                               default=Decimal('0'),
                                               help_text='سعر استرشادي — التكلفة الفعلية بتيجي من '
@@ -1002,6 +1013,22 @@ class Accessory(models.Model):
         from core.serials import assign_if_blank
         assign_if_blank(self, 'code', 'ACC-', 4)
         super().save(*args, **kwargs)
+
+    @property
+    def conversion_factor(self):
+        """المعدل المستخدم في التحويل — على الأقل 1 لو فاضي/صفر."""
+        f = Decimal(self.units_per_purchase or 0)
+        return f if f > 0 else Decimal('1')
+
+    @property
+    def stock_in_purchase_unit(self):
+        """الرصيد الحالي معبَّراً عنه بوحدة الشراء (للعرض)."""
+        return (Decimal(self.current_stock or 0) / self.conversion_factor)
+
+    @property
+    def cost_per_purchase_unit(self):
+        """متوسط التكلفة معبَّراً عنه بوحدة الشراء (للعرض)."""
+        return (Decimal(self.average_cost or 0) * self.conversion_factor)
 
 
 class AccessoryPurchaseInvoice(models.Model):
@@ -1092,8 +1119,9 @@ class AccessoryPurchase(models.Model):
                                   verbose_name='المورد',
                                   limit_choices_to={'vendor_type__code': 'ACCESSORIES'},
                                   help_text='إجباري لو الشراء آجل')
-    quantity = models.DecimalField('الكمية', max_digits=14, decimal_places=3)
-    unit_cost = models.DecimalField('سعر الوحدة', max_digits=12, decimal_places=4)
+    quantity = models.DecimalField('الكمية (بوحدة الشراء)', max_digits=14, decimal_places=3,
+                                    help_text='الكمية بوحدة الشراء — النظام يحوّلها لوحدة الاستهلاك تلقائياً')
+    unit_cost = models.DecimalField('سعر وحدة الشراء', max_digits=12, decimal_places=4)
     payment_method = models.CharField('طريقة الدفع', max_length=10,
                                        choices=PAYMENT_CHOICES, default='CASH')
     cash_account = models.ForeignKey('core.CashAccount', null=True, blank=True,

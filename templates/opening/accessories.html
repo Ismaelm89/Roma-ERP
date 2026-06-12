@@ -3,9 +3,10 @@
 
 {% block ob %}
 <p class="ob-hint">
-    اكتب الكمية وتكلفة الوحدة (متوسط التكلفة) لكل إكسسوار عند بداية النشاط.
-    القيمة = الكمية × التكلفة. سيب الكمية فاضية للإكسسوارات اللي مفيش منها رصيد.
-    لازم تدخل الرصيد الافتتاحي قبل أي شراء أو صرف فعلي للإكسسوار.
+    اكتب الكمية وسعر الوحدة <b>بوحدة الشراء</b> لكل إكسسوار عند بداية النشاط (مثال: لو بتشتريه
+    بالكيلو، اكتب عدد الكيلوهات وسعر الكيلو). النظام يحوّلها لوحدة الاستهلاك تلقائياً حسب المعدل.
+    القيمة = الكمية × السعر. سيب الكمية فاضية للإكسسوارات اللي مفيش منها رصيد. لازم تدخل الرصيد
+    الافتتاحي قبل أي شراء أو صرف فعلي للإكسسوار.
 </p>
 
 <form method="post">
@@ -21,9 +22,10 @@
             <tr>
                 <th class="code">الكود</th>
                 <th>الإكسسوار</th>
-                <th style="width:80px;">الوحدة</th>
-                <th class="num" style="width:130px;">الكمية</th>
-                <th class="num" style="width:140px;">تكلفة الوحدة</th>
+                <th style="width:80px;">وحدة الشراء</th>
+                <th class="num" style="width:70px;">المعدل</th>
+                <th class="num" style="width:130px;">الكمية (شراء)</th>
+                <th class="num" style="width:140px;">سعر وحدة الشراء</th>
                 <th class="num" style="width:140px;">القيمة</th>
             </tr>
         </thead>
@@ -31,8 +33,11 @@
             {% for r in rows %}
             <tr>
                 <td class="code">{{ r.a.code }}</td>
-                <td class="lbl">{{ r.a.name_ar }}</td>
-                <td>{{ r.a.get_unit_display }}</td>
+                <td class="lbl">{{ r.a.name_ar }}
+                    <span class="muted" style="font-size:11px;">(استهلاك: {{ r.a.get_unit_display }}){% if r.a.conversion_note %} · {{ r.a.conversion_note }}{% endif %}</span>
+                </td>
+                <td>{{ r.a.get_purchase_unit_display }}</td>
+                <td class="num">{{ r.a.units_per_purchase|floatformat:"-2" }}</td>
                 <td class="num">
                     <input type="number" step="0.001" min="0" name="qty_{{ r.a.id }}"
                            value="{{ r.qty }}" placeholder="0" class="acc-qty">
@@ -47,7 +52,7 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="5">إجمالي قيمة مخزون الإكسسوارات الافتتاحي</td>
+                <td colspan="6">إجمالي قيمة مخزون الإكسسوارات الافتتاحي</td>
                 <td class="num" id="acc-total">0.00</td>
             </tr>
         </tfoot>

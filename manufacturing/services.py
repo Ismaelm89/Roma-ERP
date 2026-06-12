@@ -210,11 +210,23 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
 def _accessory_apply_stock_in(purchase: AccessoryPurchase):
     """Raise the accessory's current_stock + recompute its WAC for one line
     (no GL). Returns the line total (qty × unit_cost). The caller owns the JE.
+
+    Purchase qty/cost are entered in the PURCHASE unit; stock + WAC are tracked
+    in the CONSUMPTION unit. We convert via units_per_purchase (المعدل):
+        stock_consumption += qty_purchase × المعدل
+        cost_consumption   = cost_purchase ÷ المعدل
+    The line total (qty_purchase × cost_purchase) is unchanged, so the GL is
+    unaffected.
     """
-    qty = Decimal(purchase.quantity or 0)
-    unit_cost = Decimal(purchase.unit_cost or 0)
-    total = _q(qty * unit_cost)
     a = Accessory.objects.select_for_update().get(pk=purchase.accessory_id)
+    qty_p = Decimal(purchase.quantity or 0)
+    cost_p = Decimal(purchase.unit_cost or 0)
+    total = _q(qty_p * cost_p)
+    factor = Decimal(a.units_per_purchase or 0)
+    if factor <= 0:
+        factor = Decimal('1')
+    qty = qty_p * factor                       # in consumption units
+    unit_cost = cost_p / factor                # cost per consumption unit
     old_stock = Decimal(a.current_stock or 0)
     old_cost = Decimal(a.average_cost or 0)
     new_stock = old_stock + qty
