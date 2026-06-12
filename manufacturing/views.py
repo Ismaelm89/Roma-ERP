@@ -15,8 +15,6 @@ from .models import (FabricBatch, FabricMovement, Supplier, ProductionOrder,
 @login_required
 def fabric_on_hand(request):
     """Every batch with remaining qty > 0, plus headline totals."""
-    show_at_dyer = request.GET.get('include_at_dyer', '1') == '1'
-
     qs = (FabricBatch.objects
           .filter(is_posted=True)
           .select_related('supplier', 'fabric_type', 'color')
@@ -24,39 +22,28 @@ def fabric_on_hand(request):
 
     batches = []
     total_in_stock_kg = Decimal('0')
-    total_at_dyer_kg = Decimal('0')
     total_value = Decimal('0')
 
     for b in qs:
         in_stock = Decimal(b.in_stock_qty_kg)
-        at_dyer = Decimal('0')
-        remaining = in_stock + at_dyer
-        if remaining <= 0:
-            continue
-        if not show_at_dyer and in_stock <= 0:
+        if in_stock <= 0:
             continue
         # value of *what's left* = cost_per_kg × remaining
-        value_left = (b.cost_per_kg * remaining).quantize(Decimal('0.01'))
+        value_left = (b.cost_per_kg * in_stock).quantize(Decimal('0.01'))
         batches.append({
             'b': b,
             'in_stock_kg': in_stock,
-            'at_dyer_kg': at_dyer,
-            'remaining_kg': remaining,
             'cost_per_kg': b.cost_per_kg,
             'value_left': value_left,
         })
         total_in_stock_kg += in_stock
-        total_at_dyer_kg += at_dyer
         total_value += value_left
 
     context = {
         'company': Company.objects.first(),
         'batches': batches,
         'total_in_stock_kg': total_in_stock_kg,
-        'total_at_dyer_kg': total_at_dyer_kg,
-        'total_remaining_kg': total_in_stock_kg + total_at_dyer_kg,
         'total_value': total_value,
-        'show_at_dyer': show_at_dyer,
     }
     return render(request, 'manufacturing/fabric_on_hand.html', context)
 

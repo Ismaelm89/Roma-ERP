@@ -5,34 +5,17 @@
 <div class="header-grid">
     <div class="company-block">
         <h1>القماش الموجود (دفعات لسه ما اتصرفش بالكامل)</h1>
-        <div class="muted">دفعات لها رصيد بالمخزن أو في المصبغة</div>
+        <div class="muted">دفعات لها رصيد متبقي بالمخزن</div>
     </div>
     <div class="meta-block">
         <div class="muted">الكميات بالكيلو · القيم بالجنيه</div>
-        <div class="no-print" style="margin-top:8px">
-            <form method="get" style="display:inline">
-                <label>
-                    <input type="checkbox" name="include_at_dyer" value="1" {% if show_at_dyer %}checked{% endif %}
-                           onchange="this.form.submit()">
-                    إظهار الدفعات اللي في المصبغة
-                </label>
-            </form>
-        </div>
     </div>
 </div>
 
 <div class="summary-strip" style="display:flex;gap:12px;margin:12px 0;">
     <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;padding:10px;border-radius:6px;">
-        <div class="muted">بالمخزن</div>
+        <div class="muted">إجمالي المتبقي بالمخزن</div>
         <div style="font-size:22px;font-weight:700;color:#15803d;">{{ total_in_stock_kg|money:3 }} كجم</div>
-    </div>
-    <div style="flex:1;background:#fffbeb;border:1px solid #fde68a;padding:10px;border-radius:6px;">
-        <div class="muted">في المصبغة</div>
-        <div style="font-size:22px;font-weight:700;color:#b45309;">{{ total_at_dyer_kg|money:3 }} كجم</div>
-    </div>
-    <div style="flex:1;background:#eff6ff;border:1px solid #bfdbfe;padding:10px;border-radius:6px;">
-        <div class="muted">إجمالي المتبقي</div>
-        <div style="font-size:22px;font-weight:700;color:#1d4ed8;">{{ total_remaining_kg|money:3 }} كجم</div>
     </div>
     <div style="flex:1;background:#fdf4ff;border:1px solid #f0abfc;padding:10px;border-radius:6px;">
         <div class="muted">قيمة المخزون المتبقي</div>
@@ -49,9 +32,7 @@
             <th>اللون</th>
             <th class="num">تاريخ الشراء</th>
             <th class="num">المشتراة</th>
-            <th class="num">بالمخزن</th>
-            <th class="num">بالمصبغة</th>
-            <th class="num">المتبقي</th>
+            <th class="num">المتبقي بالمخزن</th>
             <th class="num">تكلفة الكيلو</th>
             <th class="num">قيمة المتبقي</th>
         </tr>
@@ -71,20 +52,12 @@
             </td>
             <td class="num">{{ row.b.purchase_date|date:"d/m/Y" }}</td>
             <td class="num">{{ row.b.purchase_qty_kg|money:3 }}</td>
-            <td class="num">{{ row.in_stock_kg|money:3 }}</td>
-            <td class="num">
-                {% if row.at_dyer_kg > 0 %}
-                    <b style="color:#b45309">{{ row.at_dyer_kg|money:3 }}</b>
-                {% else %}
-                    —
-                {% endif %}
-            </td>
-            <td class="num"><b>{{ row.remaining_kg|money:3 }}</b></td>
+            <td class="num"><b>{{ row.in_stock_kg|money:3 }}</b></td>
             <td class="num">{{ row.cost_per_kg|money:4 }}</td>
             <td class="num"><b>{{ row.value_left|money:2 }}</b></td>
         </tr>
     {% empty %}
-        <tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px;">
+        <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">
             لا توجد دفعات قماش لها رصيد متبقي.
         </td></tr>
     {% endfor %}
@@ -94,8 +67,6 @@
         <tr class="totals">
             <td colspan="6" style="font-weight:700;">الإجمالي</td>
             <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_in_stock_kg|money:3 }}</td>
-            <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_at_dyer_kg|money:3 }}</td>
-            <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_remaining_kg|money:3 }}</td>
             <td></td>
             <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_value|money:2 }}</td>
         </tr>
