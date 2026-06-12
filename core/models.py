@@ -99,6 +99,9 @@ class JournalLine(models.Model):
     supplier = models.ForeignKey('manufacturing.Supplier', null=True, blank=True,
                                   on_delete=models.PROTECT, related_name='journal_lines',
                                   verbose_name='المورد')
+    accessory = models.ForeignKey('manufacturing.Accessory', null=True, blank=True,
+                                   on_delete=models.PROTECT, related_name='journal_lines',
+                                   verbose_name='الإكسسوار')
 
     class Meta:
         verbose_name = 'بند قيد'

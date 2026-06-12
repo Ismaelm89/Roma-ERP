@@ -52,11 +52,12 @@ table.ob tfoot td { font-weight:700; border-top:2px solid var(--ink); background
     <a href="{% url 'opening:hub' %}"       {% if active == 'hub' %}class="active"{% endif %}>الملخّص</a>
     <a href="{% url 'opening:customers' %}" {% if active == 'customers' %}class="active"{% endif %}><span class="n">1</span>العملاء</a>
     <a href="{% url 'opening:suppliers' %}" {% if active == 'suppliers' %}class="active"{% endif %}><span class="n">2</span>الموردين</a>
-    <a href="{% url 'opening:inventory' %}" {% if active == 'inventory' %}class="active"{% endif %}><span class="n">3</span>المخزون</a>
-    <a href="{% url 'opening:fabric' %}"    {% if active == 'fabric' %}class="active"{% endif %}><span class="n">4</span>الأقمشة</a>
-    <a href="{% url 'opening:assets' %}"    {% if active == 'assets' %}class="active"{% endif %}><span class="n">5</span>الأصول</a>
-    <a href="{% url 'opening:cash' %}"      {% if active == 'cash' %}class="active"{% endif %}><span class="n">6</span>النقدية</a>
-    <a href="{% url 'opening:finalize' %}"  {% if active == 'finalize' %}class="active"{% endif %}><span class="n">7</span>الإقفال</a>
+    <a href="{% url 'opening:inventory' %}"   {% if active == 'inventory' %}class="active"{% endif %}><span class="n">3</span>المخزون</a>
+    <a href="{% url 'opening:accessories' %}" {% if active == 'accessories' %}class="active"{% endif %}><span class="n">4</span>الإكسسوارات</a>
+    <a href="{% url 'opening:fabric' %}"      {% if active == 'fabric' %}class="active"{% endif %}><span class="n">5</span>الأقمشة</a>
+    <a href="{% url 'opening:assets' %}"      {% if active == 'assets' %}class="active"{% endif %}><span class="n">6</span>الأصول</a>
+    <a href="{% url 'opening:cash' %}"        {% if active == 'cash' %}class="active"{% endif %}><span class="n">7</span>النقدية</a>
+    <a href="{% url 'opening:finalize' %}"    {% if active == 'finalize' %}class="active"{% endif %}><span class="n">8</span>الإقفال</a>
 </div>
 
 {% if messages %}

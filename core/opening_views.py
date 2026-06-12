@@ -15,8 +15,8 @@ from .models import Account, JournalEntry, JournalLine
 from .opening import (
     SRC, OpeningError, opening_summary,
     post_customers_opening, post_suppliers_opening, post_cash_opening,
-    post_assets_opening, post_inventory_opening, post_fabric_opening,
-    finalize_opening,
+    post_assets_opening, post_inventory_opening, post_accessories_opening,
+    post_fabric_opening, finalize_opening,
 )
 
 
@@ -170,6 +170,49 @@ def inventory(request):
     return render(request, 'opening/inventory.html', {
         'active': 'inventory', 'rows': rows,
         'ob_date': _existing_date(SRC['inventory']),
+    })
+
+
+# ------------------------------------------------------------------
+#  Accessories (raw material)
+# ------------------------------------------------------------------
+
+@login_required
+def accessories(request):
+    from manufacturing.models import Accessory
+    accs = list(Accessory.objects.filter(active=True).order_by('code'))
+
+    if request.method == 'POST':
+        ob_date = _parse_date(request.POST.get('ob_date'))
+        rows = []
+        for a in accs:
+            qty = _dec(request.POST.get(f'qty_{a.id}'))
+            cost = _dec(request.POST.get(f'cost_{a.id}'))
+            rows.append((a, qty, cost))
+        try:
+            post_accessories_opening(rows, date=ob_date)
+            messages.success(request, 'تم حفظ الأرصدة الافتتاحية للإكسسوارات.')
+        except OpeningError as e:
+            messages.error(request, str(e))
+        return redirect('opening:accessories')
+
+    # prefill: الإكسسوارات اللي ليها بند في قيد الافتتاح بترجّع كميتها وتكلفتها الحالية
+    # (الافتتاح بيكتبهم مباشرة على الصنف، والحارس بيمنع أي حركة تانية تغيّرهم).
+    opened = set(JournalLine.objects
+                 .filter(entry__source_doc_type=SRC['accessories'])
+                 .exclude(accessory__isnull=True)
+                 .values_list('accessory_id', flat=True))
+    rows = []
+    for a in accs:
+        on = a.id in opened
+        rows.append({
+            'a': a,
+            'qty': _fmt(a.current_stock) if on else '',
+            'cost': _fmt(a.average_cost) if on else (_fmt(a.default_unit_cost) or ''),
+        })
+    return render(request, 'opening/accessories.html', {
+        'active': 'accessories', 'rows': rows,
+        'ob_date': _existing_date(SRC['accessories']),
     })
 
 

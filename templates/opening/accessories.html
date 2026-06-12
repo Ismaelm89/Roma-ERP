@@ -1,0 +1,88 @@
+{% extends "opening/_base.html" %}
+{% block ob_title %}4) الأرصدة الافتتاحية للإكسسوارات{% endblock %}
+
+{% block ob %}
+<p class="ob-hint">
+    اكتب الكمية وتكلفة الوحدة (متوسط التكلفة) لكل إكسسوار عند بداية النشاط.
+    القيمة = الكمية × التكلفة. سيب الكمية فاضية للإكسسوارات اللي مفيش منها رصيد.
+    لازم تدخل الرصيد الافتتاحي قبل أي شراء أو صرف فعلي للإكسسوار.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="ob-date no-print">
+        <label for="ob_date">تاريخ الرصيد الافتتاحي</label>
+        <input type="date" id="ob_date" name="ob_date" value="{{ ob_date|date:'Y-m-d' }}">
+    </div>
+
+    {% if rows %}
+    <table class="ob" id="acc-table">
+        <thead>
+            <tr>
+                <th class="code">الكود</th>
+                <th>الإكسسوار</th>
+                <th style="width:80px;">الوحدة</th>
+                <th class="num" style="width:130px;">الكمية</th>
+                <th class="num" style="width:140px;">تكلفة الوحدة</th>
+                <th class="num" style="width:140px;">القيمة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td class="code">{{ r.a.code }}</td>
+                <td class="lbl">{{ r.a.name_ar }}</td>
+                <td>{{ r.a.get_unit_display }}</td>
+                <td class="num">
+                    <input type="number" step="0.001" min="0" name="qty_{{ r.a.id }}"
+                           value="{{ r.qty }}" placeholder="0" class="acc-qty">
+                </td>
+                <td class="num">
+                    <input type="number" step="0.0001" min="0" name="cost_{{ r.a.id }}"
+                           value="{{ r.cost }}" placeholder="0.00" class="acc-cost">
+                </td>
+                <td class="num acc-value">—</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="5">إجمالي قيمة مخزون الإكسسوارات الافتتاحي</td>
+                <td class="num" id="acc-total">0.00</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="ob-actions no-print">
+        <button class="btn" type="submit">💾 حفظ أرصدة الإكسسوارات</button>
+        <a class="btn secondary" href="{% url 'opening:fabric' %}">التالي: الأقمشة ⟵</a>
+    </div>
+    {% else %}
+    <div class="empty">مفيش إكسسوارات متسجّلة. ضيف الإكسسوارات الأول من
+        <a href="/admin/manufacturing/accessory/add/" target="_blank">شاشة الإكسسوارات</a> وبعدين ارجع هنا.</div>
+    {% endif %}
+</form>
+
+<script>
+(function () {
+    var fmt = function (n) {
+        return n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var recalc = function () {
+        var total = 0;
+        document.querySelectorAll('#acc-table tbody tr').forEach(function (tr) {
+            var q = parseFloat(tr.querySelector('.acc-qty').value) || 0;
+            var c = parseFloat(tr.querySelector('.acc-cost').value) || 0;
+            var v = q * c;
+            total += v;
+            tr.querySelector('.acc-value').textContent = v ? fmt(v) : '—';
+        });
+        var t = document.getElementById('acc-total');
+        if (t) t.textContent = fmt(total);
+    };
+    document.querySelectorAll('#acc-table .acc-qty, #acc-table .acc-cost')
+        .forEach(function (el) { el.addEventListener('input', recalc); });
+    recalc();
+})();
+</script>
+{% endblock %}

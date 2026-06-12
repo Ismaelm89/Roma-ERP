@@ -71,9 +71,10 @@ SRC = {
     'suppliers': 'Opening:Suppliers',
     'cash':      'Opening:Cash',
     'assets':    'Opening:Assets',
-    'inventory': 'Opening:Inventory',
-    'fabric':    'Opening:Fabric',
-    'finalize':  'Opening:Finalize',
+    'inventory':   'Opening:Inventory',
+    'accessories': 'Opening:Accessories',
+    'fabric':      'Opening:Fabric',
+    'finalize':    'Opening:Finalize',
 }
 
 
@@ -392,6 +393,89 @@ def post_inventory_opening(submitted, date=None):
 
 
 # ------------------------------------------------------------------
+#  5b) Accessory (raw material) opening — DR Accessory Inventory (tagged) / CR OBE
+# ------------------------------------------------------------------
+
+@transaction.atomic
+def post_accessories_opening(submitted, date=None):
+    """submitted: iterable of (Accessory, qty, unit_cost) for every accessory shown.
+
+    Sets each accessory's opening stock + WAC directly (opening is the base
+    balance) and posts DR Accessory Inventory (tagged, accessory FK) / CR OBE.
+    Idempotent: re-editing drops the prior opening JE, zeroes accessories that
+    were opening-only and are no longer set, then re-applies the new rows.
+
+    Opening must be entered BEFORE any real accessory movement; an accessory that
+    already has a purchase/usage history is rejected so we never clobber it.
+    """
+    from manufacturing.models import Accessory, AccessoryPurchase, AccessoryUsage
+
+    user = get_opening_user()
+    date = date or timezone.now().date()
+    acc_inv = get_system_account('ACCESSORY_INVENTORY')
+    obe = get_system_account('OPENING_EQUITY')
+
+    # Accessories that were part of the PRIOR opening (so we can reset removed ones).
+    prior_ids = set(JournalLine.objects
+                    .filter(entry__source_doc_type=SRC['accessories'])
+                    .exclude(accessory__isnull=True)
+                    .values_list('accessory_id', flat=True))
+
+    clean = [(a, Decimal(q or 0), Decimal(c or 0)) for a, q, c in submitted
+             if Decimal(q or 0) > 0]
+    clean_ids = {a.id for a, _, _ in clean}
+
+    # Guard: any accessory we're about to (re)write must have no real movement
+    # history — only opening can touch its stock.
+    touched = prior_ids | clean_ids
+    if touched:
+        bad = set(AccessoryPurchase.objects.filter(accessory_id__in=touched)
+                  .values_list('accessory__name_ar', flat=True))
+        bad |= set(AccessoryUsage.objects.filter(accessory_id__in=touched)
+                   .values_list('accessory__name_ar', flat=True))
+        bad = sorted(b for b in bad if b)
+        if bad:
+            raise OpeningError(
+                'فيه حركات فعلية (شراء/صرف) على الإكسسوارات دي — مينفعش تظبط رصيدها '
+                'الافتتاحي من هنا: ' + '، '.join(bad) + '.')
+
+    # Idempotent rebuild.
+    _delete_opening(SRC['accessories'])
+    # Reset accessories that were opening-only and are no longer set.
+    for aid in (prior_ids - clean_ids):
+        Accessory.objects.filter(pk=aid).update(
+            current_stock=Decimal('0'), average_cost=Decimal('0'))
+
+    if not clean:
+        return None
+
+    total = Decimal('0')
+    je = JournalEntry.objects.create(
+        date=date, reference='رصيد افتتاحي — إكسسوارات',
+        description='أرصدة افتتاحية لمخزون الإكسسوارات',
+        status='POSTED', source_doc_type=SRC['accessories'], source_doc_id=0,
+        created_by=user,
+    )
+    for a, qty, cost in clean:
+        if cost < 0:
+            raise OpeningError(f'تكلفة سالبة للإكسسوار {a.name_ar}.')
+        value = _q(qty * cost)
+        total += value
+        Accessory.objects.filter(pk=a.pk).update(current_stock=qty, average_cost=cost)
+        JournalLine.objects.create(
+            entry=je, account=acc_inv, debit=value, credit=Decimal('0'),
+            accessory=a, description=f'رصيد افتتاحي — {a.name_ar}',
+        )
+    JournalLine.objects.create(
+        entry=je, account=obe, debit=Decimal('0'), credit=_q(total),
+        description='مقابل أرصدة الإكسسوارات الافتتاحية',
+    )
+    je.recalc_totals()
+    assert je.total_debit == je.total_credit, 'accessories opening JE unbalanced'
+    return je
+
+
+# ------------------------------------------------------------------
 #  6) Fabric (raw material) opening — DR Fabric Inventory (tagged) / CR OBE
 # ------------------------------------------------------------------
 
@@ -562,7 +646,8 @@ def opening_summary():
         return (agg['d'] or Decimal('0')) + (agg['c'] or Decimal('0'))
 
     kinds = {}
-    for key in ('customers', 'suppliers', 'cash', 'assets', 'inventory', 'fabric'):
+    for key in ('customers', 'suppliers', 'cash', 'assets', 'inventory',
+                'accessories', 'fabric'):
         src = SRC[key]
         kinds[key] = {
             'exists': JournalEntry.objects.filter(source_doc_type=src).exists(),

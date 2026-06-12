@@ -3,7 +3,7 @@
 
 {% block ob %}
 <p class="ob-hint">
-    سجّل أرصدة بداية النشاط خطوة بخطوة (العملاء، الموردين، المخزون، الأقمشة، الأصول، النقدية).
+    سجّل أرصدة بداية النشاط خطوة بخطوة (العملاء، الموردين، المخزون، الإكسسوارات، الأقمشة، الأصول، النقدية).
     كل رصيد بيتسجّل في قيد طرفه التاني «حساب الأرصدة الافتتاحية»، وفي الآخر تيجي خطوة
     «الإقفال» توزّع الرصيد على رأس المال المسجّل + جاري الشريك. تقدر ترجع تعدّل أي شاشة وتحفظ تاني في أي وقت.
 </p>
@@ -37,19 +37,25 @@
             <td class="no-print"><a href="{% url 'opening:inventory' %}">فتح</a></td>
         </tr>
         <tr>
-            <td class="lbl">4) مخزون الأقمشة</td>
+            <td class="lbl">4) مخزون الإكسسوارات</td>
+            <td>{% if s.kinds.accessories.exists %}✅ مُسجّل{% else %}— لم يُسجّل{% endif %}</td>
+            <td class="num">{{ s.kinds.accessories.total|money }}</td>
+            <td class="no-print"><a href="{% url 'opening:accessories' %}">فتح</a></td>
+        </tr>
+        <tr>
+            <td class="lbl">5) مخزون الأقمشة</td>
             <td>{% if s.kinds.fabric.exists %}✅ مُسجّل{% else %}— لم يُسجّل{% endif %}</td>
             <td class="num">{{ s.kinds.fabric.total|money }}</td>
             <td class="no-print"><a href="{% url 'opening:fabric' %}">فتح</a></td>
         </tr>
         <tr>
-            <td class="lbl">5) الأصول الثابتة</td>
+            <td class="lbl">6) الأصول الثابتة</td>
             <td>{% if s.kinds.assets.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
             <td class="num">{{ s.kinds.assets.total|money }}</td>
             <td class="no-print"><a href="{% url 'opening:assets' %}">فتح</a></td>
         </tr>
         <tr>
-            <td class="lbl">6) النقدية والبنوك والمحافظ</td>
+            <td class="lbl">7) النقدية والبنوك والمحافظ</td>
             <td>{% if s.kinds.cash.exists %}✅ مُسجّلة{% else %}— لم تُسجّل{% endif %}</td>
             <td class="num">{{ s.kinds.cash.total|money }}</td>
             <td class="no-print"><a href="{% url 'opening:cash' %}">فتح</a></td>
@@ -64,7 +70,7 @@
     </tfoot>
 </table>
 
-<h2>7) الإقفال على رأس المال وجاري الشريك</h2>
+<h2>8) الإقفال على رأس المال وجاري الشريك</h2>
 {% if s.finalized %}
 <table class="ob">
     <tbody>
