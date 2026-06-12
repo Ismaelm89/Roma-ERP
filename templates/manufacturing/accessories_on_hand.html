@@ -1,0 +1,64 @@
+{% extends "sales/_base_print.html" %}
+{% block title %}الإكسسوارات الموجودة — {{ company.name_ar|default:"Roma" }}{% endblock %}
+
+{% block content %}
+<div class="header-grid">
+    <div class="company-block">
+        <h1>الإكسسوارات الموجودة (أصناف لها رصيد متبقي)</h1>
+        <div class="muted">أصناف الإكسسوارات اللي لسه ليها رصيد بالمخزن</div>
+    </div>
+    <div class="meta-block">
+        <div class="muted">القيم بالجنيه</div>
+    </div>
+</div>
+
+<div class="summary-strip" style="display:flex;gap:12px;margin:12px 0;">
+    <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;padding:10px;border-radius:6px;">
+        <div class="muted">عدد الأصناف اللي لها رصيد</div>
+        <div style="font-size:22px;font-weight:700;color:#15803d;">{{ total_lines }} صنف</div>
+    </div>
+    <div style="flex:1;background:#fdf4ff;border:1px solid #f0abfc;padding:10px;border-radius:6px;">
+        <div class="muted">قيمة مخزون الإكسسوارات</div>
+        <div style="font-size:22px;font-weight:700;color:#86198f;">{{ total_value|money:2 }} جنيه</div>
+    </div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>الكود</th>
+            <th>الإكسسوار</th>
+            <th>الوحدة</th>
+            <th>المورد</th>
+            <th class="num">الرصيد المتبقي</th>
+            <th class="num">متوسط التكلفة</th>
+            <th class="num">قيمة المتبقي</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td><b>{{ row.a.code }}</b></td>
+            <td>{{ row.a.name_ar }}</td>
+            <td>{{ row.a.unit }}</td>
+            <td>{{ row.a.supplier.name|default:"—" }}</td>
+            <td class="num"><b>{{ row.stock|money:3 }}</b></td>
+            <td class="num">{{ row.avg_cost|money:4 }}</td>
+            <td class="num"><b>{{ row.value|money:2 }}</b></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">
+            لا توجد أصناف إكسسوارات لها رصيد متبقي.
+        </td></tr>
+    {% endfor %}
+    </tbody>
+    {% if rows %}
+    <tfoot>
+        <tr class="totals">
+            <td colspan="6" style="font-weight:700;">الإجمالي</td>
+            <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_value|money:2 }}</td>
+        </tr>
+    </tfoot>
+    {% endif %}
+</table>
+{% endblock %}

@@ -49,6 +49,34 @@ def fabric_on_hand(request):
 
 
 @login_required
+def accessories_on_hand(request):
+    """كل صنف إكسسوار له رصيد حالي > 0 + إجماليات القيمة."""
+    qs = (Accessory.objects
+          .filter(active=True)
+          .select_related('supplier')
+          .order_by('code'))
+
+    rows = []
+    total_value = Decimal('0')
+    for a in qs:
+        stock = Decimal(a.current_stock or 0)
+        if stock <= 0:
+            continue
+        avg = Decimal(a.average_cost or 0)
+        value = (stock * avg).quantize(Decimal('0.01'))
+        rows.append({'a': a, 'stock': stock, 'avg_cost': avg, 'value': value})
+        total_value += value
+
+    context = {
+        'company': Company.objects.first(),
+        'rows': rows,
+        'total_lines': len(rows),
+        'total_value': total_value,
+    }
+    return render(request, 'manufacturing/accessories_on_hand.html', context)
+
+
+@login_required
 def fabric_movements(request):
     """Filterable movement log: date range + batch + type."""
     date_from = parse_date(request.GET.get('date_from', '')) if request.GET.get('date_from') else None

@@ -6,6 +6,7 @@ app_name = 'manufacturing'
 urlpatterns = [
     path('fabric/on-hand/', views.fabric_on_hand, name='fabric_on_hand'),
     path('fabric/movements/', views.fabric_movements, name='fabric_movements'),
+    path('accessories/on-hand/', views.accessories_on_hand, name='accessories_on_hand'),
     path('suppliers/balances/', views.suppliers_balances, name='suppliers_balances'),
     path('supplier/<int:pk>/ledger/', views.supplier_ledger, name='supplier_ledger'),
     path('dyer/<int:pk>/ledger/', views.dyer_ledger, name='dyer_ledger'),
