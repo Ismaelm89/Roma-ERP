@@ -39,11 +39,17 @@ class Product(models.Model):
                                                   help_text='الدستة = وحدة البيع الافتراضية. '
                                                             'بتتطبّق على كل المنتجات الفرعية التابعة '
                                                             'للمنتج ده.')
-    waste_pct = models.DecimalField('نسبة الهالك % (للمنتج كله)', max_digits=5, decimal_places=2,
+    waste_pct = models.DecimalField('نسبة هالك القماش % (للمنتج كله)', max_digits=5, decimal_places=2,
                                     default=Decimal('0'),
                                     help_text='نسبة الزيادة على القماش بسبب الهالك — بتتحسب على '
                                               'المنتج كله مش لكل مقاس. مثال: 5 يعني الكمية المستخدمة '
                                               'بالهالك = الكمية قبل الهالك × 1.05.')
+    accessory_waste_pct = models.DecimalField('نسبة هالك الإكسسوارات % (للمنتج كله)',
+                                              max_digits=5, decimal_places=2,
+                                              default=Decimal('5'),
+                                              help_text='نسبة الزيادة على استهلاك الإكسسوارات بسبب '
+                                                        'الهالك في الإنتاج. مثال: 5 يعني الكمية '
+                                                        'المستهلكة = كمية الوصفة × 1.05.')
     notes = models.TextField('ملاحظات', blank=True)
     active = models.BooleanField('نشط', default=True)
     created_at = models.DateTimeField(auto_now_add=True)

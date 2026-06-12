@@ -980,7 +980,7 @@ class ProductionSubModelAdmin(admin.ModelAdmin):
 @admin.register(Accessory)
 class AccessoryAdmin(admin.ModelAdmin):
     list_display = ('code', 'name_ar', 'unit', 'current_stock', 'average_cost',
-                    'default_unit_cost', 'waste_pct', 'buy_link', 'active')
+                    'default_unit_cost', 'buy_link', 'active')
     list_filter = ('active', 'unit')
     search_fields = ('code', 'name_ar', 'notes')
     readonly_fields = ('code', 'current_stock', 'average_cost', 'created_at')
