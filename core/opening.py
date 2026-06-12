@@ -511,8 +511,9 @@ def post_fabric_opening(submitted, date=None):
         cost = Decimal(cost or 0)
         if qty <= 0:
             continue
-        if not (supplier and ftype and color):
-            raise OpeningError('لكل سطر قماش بكمية: لازم تختار المورد ونوع القماش واللون.')
+        # المورد اختياري في الأرصدة الافتتاحية — المطلوب نوع القماش واللون فقط.
+        if not (ftype and color):
+            raise OpeningError('لكل سطر قماش بكمية: لازم تختار نوع القماش واللون.')
         if cost < 0:
             raise OpeningError('سعر الكيلو لا يمكن أن يكون سالباً.')
         clean.append((supplier, ftype, color, qty, cost))

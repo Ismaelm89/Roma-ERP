@@ -252,10 +252,11 @@ class FabricBatch(models.Model):
 
     # Purchase info — supplier must be a Supplier whose vendor_type=FABRIC_SUPPLIER
     supplier = models.ForeignKey('Supplier', on_delete=models.PROTECT,
+                                  null=True, blank=True,
                                   related_name='fabric_batches',
                                   verbose_name='المورد',
                                   limit_choices_to={'vendor_type__code': 'FABRIC_SUPPLIER'},
-                                  help_text='اختار مورد من نوع "مورد قماش"')
+                                  help_text='اختار مورد من نوع "مورد قماش" (اختياري للأرصدة الافتتاحية)')
     fabric_type = models.ForeignKey(FabricType, on_delete=models.PROTECT,
                                      related_name='batches', verbose_name='نوع القماش')
     color = models.ForeignKey(FabricColor, on_delete=models.PROTECT,
