@@ -1188,6 +1188,16 @@ class AccessoryUsage(models.Model):
         return self.accessory.supplier if self.accessory_id else None
 
     @property
+    def qty_before_waste(self):
+        """الكمية الخام من الوصفة قبل هالك الإكسسوارات (للعرض). لو مفيش وصفة
+        مطابقة بنرجّع الكمية المستخدمة زي ما هي."""
+        if not self.order_id or not self.accessory_id:
+            return Decimal(self.actual_qty or 0)
+        base = self.order.recipe_accessory_plan(with_waste=False)
+        val = base.get(self.accessory_id)
+        return Decimal(val if val is not None else (self.actual_qty or 0))
+
+    @property
     def total_cost(self):
         return (Decimal(self.actual_qty or 0)
                 * Decimal(self.unit_cost)).quantize(Decimal('0.01'))

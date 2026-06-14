@@ -1,4 +1,5 @@
 """Roma Manufacturing — Django admin (unified-supplier version)."""
+from decimal import Decimal
 from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect
@@ -663,8 +664,15 @@ class AccessoryUsageInline(LockedInlineMixin, admin.TabularInline):
     come automatically from the Accessory master record."""
     model = AccessoryUsage
     extra = 0
-    fields = ('accessory', 'actual_qty', 'notes')
+    fields = ('accessory', 'qty_before_waste_col', 'actual_qty', 'notes')
+    readonly_fields = ('qty_before_waste_col',)
     autocomplete_fields = ('accessory',)
+
+    def qty_before_waste_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{obj.qty_before_waste.quantize(Decimal("0.001"))}'
+    qty_before_waste_col.short_description = 'الكمية قبل الهالك'
 
 
 class ProductionOrderForm(forms.ModelForm):
