@@ -656,11 +656,12 @@ class ProductionOrder(models.Model):
                 total += Decimal(r.labor_cost or 0) * Decimal(qty)
         return total.quantize(Decimal('0.01'))
 
-    def recipe_accessory_plan(self):
-        """{accessory_id: الكمية المخططة بالهالك} من الوصفة.
+    def recipe_accessory_plan(self, with_waste=True):
+        """{accessory_id: الكمية المخططة} من الوصفة.
 
-        الأساس = مجموع (كمية الوصفة × قطع المقاس)، وبعدها بنطبّق نسبة هالك
-        الإكسسوارات بتاعة المنتج: الكمية المخططة = الأساس × (1 + الهالك %)."""
+        الأساس = مجموع (كمية الوصفة × قطع المقاس). مع with_waste=True (الافتراضي،
+        المستخدَم في الاستهلاك الفعلي) بنطبّق نسبة هالك الإكسسوارات: الأساس × (1 + الهالك %).
+        مع with_waste=False بنرجّع الكمية الخام (للعرض في ورقة الطباعة)."""
         recipes = self._recipe_by_size()
         base = {}
         for sid, qty in self._pieces_by_size().items():
@@ -670,7 +671,7 @@ class ProductionOrder(models.Model):
             for line in r.accessories.all():
                 base[line.accessory_id] = (base.get(line.accessory_id, Decimal('0'))
                                            + Decimal(line.qty_per_piece or 0) * Decimal(qty))
-        if not base:
+        if not base or not with_waste:
             return base
         p = self.main_product
         factor = (Decimal('1')

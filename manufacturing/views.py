@@ -274,7 +274,8 @@ def _production_order_context(order_pk):
     fabric_total_before = order.total_planned_fabric_kg
 
     # ---- الإكسسوارات: العدد ييجي تلقائياً من وصفة المنتج (مفيش إدخال يدوي) ----
-    acc_plan = order.recipe_accessory_plan()  # {accessory_id: الكمية المخططة}
+    # ورقة الطباعة بتعرض الكمية الخام بدون هالك (الهالك بيتحسب وقت الاستهلاك الفعلي بس).
+    acc_plan = order.recipe_accessory_plan(with_waste=False)  # {accessory_id: الكمية الخام}
     acc_objs = {a.id: a for a in Accessory.objects.filter(id__in=list(acc_plan.keys()))}
     accessory_rows = []
     for acc_id, qty in acc_plan.items():
