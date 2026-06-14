@@ -116,6 +116,10 @@ class Command(BaseCommand):
             if CashAccount.objects.filter(name=name).exists():
                 continue
             gl = Account.objects.filter(code=gl_code).first()
+            # تخطّى لو حساب الـ GL ده متربط بالفعل بخزينة (يمكن المستخدم غيّر اسمها) —
+            # gl_account فريد، فمحاولة الإنشاء تاني بتكسر إقلاع السيرفر.
+            if gl and CashAccount.objects.filter(gl_account=gl).exists():
+                continue
             CashAccount.objects.create(
                 name=name, account_type=acct_type,
                 gl_account=gl, is_default=is_default, active=True,
