@@ -1,7 +1,8 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve as _serve_media
 
 from core.views import dashboard
 from core import admin_sidebar
@@ -24,3 +25,10 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+else:
+    # Production: WhiteNoise serves /static/. Uploaded media (logo, product images)
+    # is low-traffic, so serve it through Django (nginx already proxies /media/ here).
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', _serve_media,
+                {'document_root': settings.MEDIA_ROOT}),
+    ]
