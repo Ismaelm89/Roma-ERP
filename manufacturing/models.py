@@ -202,7 +202,7 @@ class FabricPurchaseInvoice(models.Model):
         ordering = ['-date', '-id']
 
     def __str__(self):
-        return f'{self.invoice_no} — {self.supplier.name}'
+        return f'{self.invoice_no} — {self.supplier.name if self.supplier_id else "كاش"}'
 
     def save(self, *args, **kwargs):
         from core.serials import assign_if_blank

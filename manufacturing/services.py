@@ -75,7 +75,7 @@ def _fabric_apply_stock_in(batch: FabricBatch, user=None):
         cost_per_kg_snapshot=batch.purchase_unit_cost,
         document_type='FabricBatch',
         document_id=batch.id,
-        notes=f'شراء دفعة {batch.batch_no} من {batch.supplier.name}',
+        notes=f'شراء دفعة {batch.batch_no} من {batch.supplier.name if batch.supplier_id else "كاش"}',
         created_by=user,
     )
     batch.in_stock_qty_kg = Decimal(batch.purchase_qty_kg)
@@ -128,7 +128,7 @@ def post_fabric_purchase(batch: FabricBatch, user=None):
     JournalLine.objects.create(
         entry=je, account=credit_acct,
         debit=Decimal('0'), credit=purchase_total,
-        description=f'شراء قماش من {batch.supplier.name}',
+        description=f'شراء قماش من {batch.supplier.name if batch.supplier_id else "كاش"}',
         supplier=batch.supplier,
     )
     je.recalc_totals()
