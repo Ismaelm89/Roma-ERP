@@ -175,10 +175,10 @@ class FabricPurchaseInvoice(models.Model):
 
     invoice_no = models.CharField('رقم الفاتورة', max_length=30, unique=True, blank=True,
                                   help_text='سيب الخانة فاضية وهيتولّد تلقائياً (FPI-0001 ...)')
-    supplier = models.ForeignKey('Supplier', on_delete=models.PROTECT,
+    supplier = models.ForeignKey('Supplier', null=True, blank=True, on_delete=models.PROTECT,
                                  related_name='fabric_invoices', verbose_name='المورد',
                                  limit_choices_to={'vendor_type__code': 'FABRIC_SUPPLIER'},
-                                 help_text='اختار مورد من نوع "مورد قماش"')
+                                 help_text='إجباري لو الفاتورة آجلة. سيبه فاضي لو كاش/بنك.')
     supplier_ref = models.CharField('رقم فاتورة المورد', max_length=50, blank=True,
                                     help_text='رقم الفاتورة الورقية اللي جايه من المورد (اختياري)')
     date = models.DateField('تاريخ الفاتورة')

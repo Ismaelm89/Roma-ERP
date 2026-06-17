@@ -155,6 +155,10 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
     lines = list(invoice.lines.select_related('fabric_type', 'color').all())
     if not lines:
         raise FabricPostingError('أضف بند واحد على الأقل قبل الترحيل.')
+    if invoice.payment_method == 'CREDIT' and not invoice.supplier_id:
+        raise FabricPostingError('اختار المورد للفاتورة الآجلة.')
+    if invoice.payment_method in ('CASH', 'BANK') and not invoice.cash_account_id:
+        raise FabricPostingError('اختار حساب الدفع (نقدية/بنك/محفظة) للفاتورة.')
     for b in lines:
         if b.is_posted:
             raise FabricPostingError(f'البند {b.batch_no} مرحّل من قبل — راجع الفاتورة.')
@@ -163,10 +167,12 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
         if Decimal(b.purchase_unit_cost or 0) <= 0:
             raise FabricPostingError(f'{b.fabric_type.name_ar}: سعر الكيلو لازم يكون أكبر من صفر.')
 
+    party = invoice.supplier.name if invoice.supplier_id else (
+        invoice.cash_account.name if invoice.cash_account_id else 'كاش')
     je = JournalEntry.objects.create(
         date=invoice.date,
         reference=invoice.invoice_no,
-        description=f'فاتورة شراء قماش {invoice.invoice_no} — {invoice.supplier.name}',
+        description=f'فاتورة شراء قماش {invoice.invoice_no} — {party}',
         status='POSTED',
         source_doc_type='FabricPurchaseInvoice',
         source_doc_id=invoice.id,
@@ -191,7 +197,7 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
     JournalLine.objects.create(
         entry=je, account=credit_acct,
         debit=Decimal('0'), credit=_q(grand_total),
-        description=f'شراء قماش من {invoice.supplier.name} — فاتورة {invoice.invoice_no}',
+        description=f'شراء قماش من {party} — فاتورة {invoice.invoice_no}',
         supplier=invoice.supplier,
     )
     je.recalc_totals()
