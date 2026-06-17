@@ -161,11 +161,20 @@ def dashboard(request):
     # نجمّع أرصدتهم — مش نقرأ الحساب النظامي القديم لوحده (اللي بيطلّع صفر).
     # بنضيف الحساب القديم 1110000/1120000 كمان عشان أي ترحيل قديم عليه ميضيعش.
     from .models import CashAccount, JournalLine
+    cash_balance = Decimal('0')
+    bank_balance = Decimal('0')
+    wallet_balance = Decimal('0')
+    # الحسابات اللي بتستخدمها الخزائن (CashAccount) — عشان منعدّش الحساب القديم مرتين.
+    used_gl_ids = set(CashAccount.objects.filter(active=True)
+                      .exclude(gl_account=None).values_list('gl_account_id', flat=True))
+    # الحساب النظامي القديم 1110000/1120000 يُضاف فقط لو مفيش خزينة بتستخدمه
+    # (الخزينة الافتراضية «الصندوق/البنك» بتستخدمه أصلاً، فبيتحسب من اللوب تحت).
     legacy_cash = Account.objects.filter(code=SYSTEM_ACCOUNTS['CASH']).first()
     legacy_bank = Account.objects.filter(code=SYSTEM_ACCOUNTS['BANK']).first()
-    cash_balance = account_balance_as_of(legacy_cash, today) if legacy_cash else Decimal('0')
-    bank_balance = account_balance_as_of(legacy_bank, today) if legacy_bank else Decimal('0')
-    wallet_balance = Decimal('0')
+    if legacy_cash and legacy_cash.id not in used_gl_ids:
+        cash_balance += account_balance_as_of(legacy_cash, today)
+    if legacy_bank and legacy_bank.id not in used_gl_ids:
+        bank_balance += account_balance_as_of(legacy_bank, today)
     for ca in CashAccount.objects.filter(active=True).select_related('gl_account'):
         bal = account_balance_as_of(ca.gl_account, today) if ca.gl_account_id else Decimal('0')
         if ca.account_type == 'CASH':
