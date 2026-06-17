@@ -177,6 +177,31 @@ class SalesInvoice(models.Model):
             return Decimal('0')
         return Decimal(self.grand_total) - Decimal(self.paid_amount)
 
+    @property
+    def total_cogs(self):
+        """تكلفة البضاعة المباعة للفاتورة كلها — المرحّلة (cogs_at_posting) للفواتير
+        المرحّلة، أو المقدّرة من متوسط تكلفة المخزون الحالي للمسودة."""
+        total = Decimal('0')
+        for ln in self.lines.select_related('variant').all():
+            if self.status == 'POSTED' and ln.cogs_at_posting:
+                total += Decimal(ln.cogs_at_posting)
+            elif ln.variant_id:
+                pieces = Decimal(ln.quantity or 0) * Decimal(ln.dozen_size)
+                total += pieces * Decimal(ln.variant.average_cost or 0)
+        return total.quantize(Decimal('0.01'))
+
+    @property
+    def profit(self):
+        """ربح/خسارة الفاتورة = الإجمالي بعد الخصم − تكلفة البضاعة المباعة."""
+        return (Decimal(self.grand_total or 0) - self.total_cogs).quantize(Decimal('0.01'))
+
+    @property
+    def profit_margin_pct(self):
+        g = Decimal(self.grand_total or 0)
+        if g <= 0:
+            return Decimal('0')
+        return (self.profit / g * Decimal('100')).quantize(Decimal('0.1'))
+
     def recalc_totals(self):
         from django.db.models import Sum
         agg = self.lines.aggregate(s=Sum('line_total'))

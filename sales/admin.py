@@ -98,7 +98,7 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
     lock_values = ('POSTED', 'CANCELLED')
     unlock_always = ('notes',)
     list_display = ('invoice_no', 'date', 'customer', 'doc_discount_percent', 'grand_total',
-                     'paid_amount_col', 'balance_due_col', 'status', 'print_link')
+                     'profit_col', 'paid_amount_col', 'balance_due_col', 'status', 'print_link')
     list_filter = ('status', 'date')
     search_fields = ('invoice_no', 'customer__code', 'customer__name_ar', 'notes')
     autocomplete_fields = ('customer',)
@@ -109,12 +109,35 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
               'doc_discount_percent', 'doc_discount_amount',
               'cash_payment_percent', 'installment_frequency',
               'subtotal', 'grand_total',
+              'total_cogs_display', 'profit_display',
               'status', 'posted_at', 'posted_by', 'journal_entry',
               'created_at', 'created_by')
     readonly_fields = ('invoice_no', 'subtotal', 'grand_total',
-                       'doc_discount_amount',
+                       'doc_discount_amount', 'total_cogs_display', 'profit_display',
                        'status', 'posted_at', 'posted_by', 'journal_entry',
                        'created_at', 'created_by')
+
+    def total_cogs_display(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.total_cogs)} ج'
+    total_cogs_display.short_description = 'تكلفة البضاعة المباعة'
+
+    def profit_display(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        p = obj.profit
+        color = '#15803d' if p >= 0 else '#b91c1c'
+        label = 'ربح' if p >= 0 else 'خسارة'
+        return format_html('<b style="color:{};font-size:14px;">{} ج ({}) · هامش {}%</b>',
+                           color, fmt_money(p), label, obj.profit_margin_pct)
+    profit_display.short_description = 'الربح / الخسارة'
+
+    def profit_col(self, obj):
+        p = obj.profit
+        color = '#15803d' if p >= 0 else '#b91c1c'
+        return format_html('<b style="color:{}">{}</b>', color, fmt_money(p))
+    profit_col.short_description = 'ربح/خسارة'
 
     class Media:
         js = ('sales/invoice_line_autofill_v4.js', 'sales/domain_filters_v4.js')
