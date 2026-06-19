@@ -138,7 +138,7 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
     fieldsets = (
         ('بيانات المنتج الفرعي', {
             'fields': ('product', 'inherited_summary', 'code', 'name_ar',
-                       'fabric_color', 'active'),
+                       'fabric_color', 'carton_size', 'active'),
             'description': 'المنتج الفرعي = اسم بيعي + صورة + لون القماش. اختار «المنتج الرئيسي» '
                            'وهو هيجيب المقاسات والأسعار والوصفة (قماش/إكسسوارات/مصنعية) '
                            'تلقائياً — المقاسات بتظهر تحت كـ SKUs للعرض فقط. '

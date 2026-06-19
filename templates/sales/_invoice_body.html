@@ -35,8 +35,9 @@
             <th>الكود</th>
             <th>الصنف</th>
             <th>المقاس</th>
-            <th class="num">عدد القطع</th>
-            <th class="num">سعر القطعة</th>
+            <th class="num">الوحدة</th>
+            <th class="num">العدد</th>
+            <th class="num">سعر الوحدة</th>
             <th class="num">الإجمالي</th>
         </tr>
     </thead>
@@ -49,7 +50,8 @@
             <td>
                 {% if line.variant %}مقاس {{ line.variant.size }}{% endif %}
             </td>
-            <td class="num">{{ line.quantity|money:0 }} قطعة</td>
+            <td class="num">{{ line.get_sale_unit_display }}</td>
+            <td class="num">{{ line.quantity|money:0 }}</td>
             <td class="num">{{ line.unit_price|money:2 }}</td>
             <td class="num">{{ line.line_total|money:2 }}</td>
         </tr>

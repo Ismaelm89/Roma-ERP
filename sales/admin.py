@@ -43,10 +43,10 @@ class CustomerAdmin(admin.ModelAdmin):
 class SalesInvoiceLineInline(LockedInlineMixin, admin.TabularInline):
     model = SalesInvoiceLine
     extra = 1
-    # Piece sales: pick the product (by name), then the size, enter number of
-    # pieces, price auto-fills (piece selling price). The size dropdown is
-    # narrowed to the chosen product's sizes by domain_filters_v4.js.
-    fields = ('item', 'variant', 'quantity', 'unit_price', 'line_total')
+    # Pick the product (by name), the size, the sale unit (piece/dozen/carton),
+    # then the count; price auto-fills (piece price × pieces-per-unit). The size
+    # dropdown is narrowed to the chosen product's sizes by domain_filters_v4.js.
+    fields = ('item', 'variant', 'sale_unit', 'quantity', 'unit_price', 'line_total')
     autocomplete_fields = ('item',)
     readonly_fields = ('line_total',)
 

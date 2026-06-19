@@ -186,7 +186,7 @@ class SalesInvoice(models.Model):
             if self.status == 'POSTED' and ln.cogs_at_posting:
                 total += Decimal(ln.cogs_at_posting)
             elif ln.variant_id:
-                pieces = Decimal(ln.quantity or 0)
+                pieces = Decimal(ln.total_pieces or 0)
                 total += pieces * Decimal(ln.variant.average_cost or 0)
         return total.quantize(Decimal('0.01'))
 
@@ -215,11 +215,14 @@ class SalesInvoice(models.Model):
 
 
 class SalesInvoiceLine(models.Model):
-    """البيع بالقطعة: كل بند = عدد قطع من مقاس محدد (variant).
-      - quantity = عدد القطع (ممكن 6، 12، 24 ...).
-      - unit_price = سعر القطعة (يتعبا تلقائياً = سعر بيع القطعة من الوصفة).
-      - عند الترحيل: يخصم (quantity) قطعة من المقاس المحدد.
+    """البيع بوحدة مختارة (قطعة/دستة/كرتونة) من مقاس محدد (variant).
+      - sale_unit = الوحدة: قطعة / دستة / كرتونة.
+      - quantity = العدد بالوحدة دي (مثلاً 3 دستة، 2 كرتونة، 6 قطع).
+      - unit_price = سعر الوحدة (يتعبا تلقائياً = سعر القطعة × عدد القطع في الوحدة).
+      - عند الترحيل: يخصم (quantity × عدد القطع في الوحدة) قطعة من المقاس.
     """
+    SALE_UNIT_CHOICES = [('PIECE', 'قطعة'), ('DOZEN', 'دستة'), ('CARTON', 'كرتونة')]
+
     invoice = models.ForeignKey(SalesInvoice, on_delete=models.CASCADE, related_name='lines')
     item = models.ForeignKey('inventory.Item', on_delete=models.PROTECT,
                               null=True, blank=True, verbose_name='الصنف',
@@ -228,10 +231,14 @@ class SalesInvoiceLine(models.Model):
                                  null=True, blank=True,
                                  verbose_name='المقاس',
                                  help_text='اختار المقاس اللي بتبيعه')
-    quantity = models.DecimalField('عدد القطع', max_digits=12, decimal_places=2,
-                                    help_text='عدد القطع المباعة من المقاس ده.')
-    unit_price = models.DecimalField('سعر القطعة', max_digits=12, decimal_places=2,
-                                      help_text='يتعبا تلقائياً = سعر بيع القطعة من الوصفة')
+    sale_unit = models.CharField('وحدة البيع', max_length=10, choices=SALE_UNIT_CHOICES,
+                                 default='PIECE',
+                                 help_text='تبيع بالقطعة ولا الدستة ولا الكرتونة. '
+                                           'الكمية والسعر بيتحسبوا على حسب الوحدة.')
+    quantity = models.DecimalField('العدد (بالوحدة)', max_digits=12, decimal_places=2,
+                                    help_text='العدد بوحدة البيع المختارة (قطع/دستات/كراتين).')
+    unit_price = models.DecimalField('سعر الوحدة', max_digits=12, decimal_places=2,
+                                      help_text='يتعبا تلقائياً = سعر القطعة × عدد القطع في الوحدة')
     line_total = models.DecimalField('الإجمالي', max_digits=14, decimal_places=2,
                                       default=Decimal('0'))
     cogs_at_posting = models.DecimalField('تكلفة البضاعة المباعة', max_digits=14, decimal_places=2,
@@ -244,29 +251,49 @@ class SalesInvoiceLine(models.Model):
     def __str__(self):
         code = self.item.code if self.item_id else '?'
         suffix = f'-{self.variant.size}' if self.variant_id else ''
-        return f'{code}{suffix} × {self.quantity} قطعة'
+        return f'{code}{suffix} × {self.quantity} {self.get_sale_unit_display()}'
+
+    @property
+    def _item(self):
+        if self.variant_id and self.variant.item_id:
+            return self.variant.item
+        return self.item if self.item_id else None
 
     @property
     def dozen_size(self):
-        """عدد القطع في الدستة لهذا الصنف (للرجوع فقط — البيع بقى بالقطعة)."""
-        if self.variant_id and self.variant.item_id:
-            return self.variant.item.dozen_size or 12
-        if self.item_id:
-            return self.item.dozen_size or 12
-        return 12
+        """عدد القطع في الدستة لهذا الصنف."""
+        it = self._item
+        return (it.dozen_size or 12) if it else 12
+
+    @property
+    def unit_factor(self):
+        """عدد القطع في وحدة البيع المختارة (قطعة=1، دستة=dozen_size، كرتونة=carton_size)."""
+        if self.sale_unit == 'DOZEN':
+            return Decimal(self.dozen_size)
+        if self.sale_unit == 'CARTON':
+            it = self._item
+            return Decimal((it.carton_size or 0) if it else 0)
+        return Decimal('1')
 
     @property
     def total_pieces(self):
-        """إجمالي القطع = عدد القطع (البيع بقى بالقطعة مباشرة)."""
-        return Decimal(self.quantity or 0).quantize(Decimal('0.01'))
+        """إجمالي القطع الفعلية = العدد × عدد القطع في الوحدة."""
+        return (Decimal(self.quantity or 0) * self.unit_factor).quantize(Decimal('0.01'))
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.sale_unit == 'CARTON' and self.variant_id and self.unit_factor <= 0:
+            raise ValidationError('حدد «عدد القطع في الكرتونة» على المنتج الفرعي الأول '
+                                  'عشان تقدر تبيع بالكرتونة.')
 
     def save(self, *args, **kwargs):
         # Derive item from the selected variant.
         if self.variant_id and not self.item_id:
             self.item = self.variant.item
-        # Auto-fill unit_price = piece selling price.
+        # Auto-fill unit_price = piece selling price × عدد القطع في الوحدة.
         if (not self.unit_price or Decimal(self.unit_price) == 0) and self.variant_id:
-            self.unit_price = Decimal(self.variant.selling_price or 0).quantize(Decimal('0.01'))
+            piece = Decimal(self.variant.selling_price or 0)
+            self.unit_price = (piece * self.unit_factor).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 
     def recalc(self):

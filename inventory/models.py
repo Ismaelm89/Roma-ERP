@@ -98,6 +98,10 @@ class Item(models.Model):
     dozen_size = models.PositiveSmallIntegerField('عدد القطع في الدستة', default=12,
                                                      help_text='الدستة = الوحدة الافتراضية للبيع. '
                                                                'مقاس واحد فيها 12 قطعة عادة.')
+    carton_size = models.PositiveSmallIntegerField('عدد القطع في الكرتونة', default=0,
+                                                   help_text='كام قطعة في الكرتونة — لازم تتحدد لو هتبيع '
+                                                             'الصنف ده بالكرتونة في الفاتورة (سيبها صفر لو '
+                                                             'مش بتبيع بالكرتونة).')
     image = models.ImageField('الصورة', upload_to='items/', blank=True, null=True)
     active = models.BooleanField('نشط', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
