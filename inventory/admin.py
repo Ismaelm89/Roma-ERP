@@ -23,6 +23,10 @@ class ItemVariantForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # لو المقاس معروض «للقراءة فقط» (منتج مُصنّع) بيكون مستبعَد من الفورم —
+        # ساعتها ما نضيفوش تاني كحقل مطلوب، وإلا الحفظ بيفشل بـ«المقاس مطلوب».
+        if 'size' not in self.fields:
+            return
         from manufacturing.models import Size
         codes = list(Size.objects.filter(active=True)
                      .order_by('sort_order', 'code').values_list('code', flat=True))
