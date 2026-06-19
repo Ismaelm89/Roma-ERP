@@ -218,6 +218,20 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
         super().save_related(request, form, formsets, change)
         invoice = form.instance
         if invoice.status == 'DRAFT':
+            # احذف البنود المكررة بالظبط (نفس المقاس + الوحدة + السعر + الكمية) — حماية
+            # من أي تكرار بيحصل بالغلط وقت الإدخال؛ بنسيب أقدم نسخة ونمسح الباقي.
+            seen = set()
+            dup_ids = []
+            for line in invoice.lines.order_by('id'):
+                key = (line.variant_id, line.sale_unit,
+                       str(line.unit_price), str(line.quantity))
+                if key in seen:
+                    dup_ids.append(line.id)
+                else:
+                    seen.add(key)
+            if dup_ids:
+                invoice.lines.filter(id__in=dup_ids).delete()
+                messages.warning(request, f'تم حذف {len(dup_ids)} بند مكرر تلقائياً.')
             for line in invoice.lines.all():
                 line.recalc()
                 line.save(update_fields=['line_total'])

@@ -20,8 +20,9 @@ from .models import Customer, SalesInvoice
 def item_default_price(request, pk):
     """Auto-fill price endpoint used by the admin JS.
 
-    `?variant=<id>`  → DOZEN sale, returns the per-dozen price
-                       (= per-piece selling price × dozen_size).
+    `?variant=<id>`  → returns the per-PIECE price plus the dozen/carton sizes,
+                       so the admin JS can compute the price for the chosen unit
+                       (piece / dozen / carton).
     no variant       → BUNDLE sale, returns Σ of per-piece SKU prices.
     """
     from inventory.models import ItemVariant
@@ -35,18 +36,17 @@ def item_default_price(request, pk):
         except (ItemVariant.DoesNotExist, ValueError):
             v = None
         if v is not None:
-            dozen = it.dozen_size or 12
-            piece = Decimal(v.selling_price or 0)
-            source = 'selling_price × dozen_size'
-            dozen_price = (piece * Decimal(dozen)).quantize(Decimal('0.01'))
+            piece = Decimal(v.selling_price or 0).quantize(Decimal('0.01'))
             return JsonResponse({
-                'unit_price': str(dozen_price),
+                'unit_price': str(piece),          # السعر الافتراضي = القطعة
+                'piece_price': str(piece),
+                'dozen_size': it.dozen_size or 12,
+                'carton_size': it.carton_size or 0,
                 'item_code': it.code,
                 'item_name_ar': it.name_ar,
-                'sale_type': 'dozen',
+                'sale_type': 'piece',
                 'size': v.size,
-                'dozen_size': dozen,
-                'price_source': source,
+                'price_source': 'selling_price (piece)',
             })
 
     # Default — bundle sale: sum of per-piece SKU selling prices across sizes.

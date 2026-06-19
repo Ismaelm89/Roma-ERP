@@ -29,25 +29,45 @@
             return $price.data('userEdited') === true;
         }
 
+        // عدد القطع في وحدة البيع المختارة في الصف (قطعة=1، دستة=dozen، كرتونة=carton).
+        function unitFactor($row) {
+            var unit = $row.find('select[name$="-sale_unit"]').val() || 'PIECE';
+            if (unit === 'DOZEN') return parseFloat($row.data('dozenSize')) || 12;
+            if (unit === 'CARTON') return parseFloat($row.data('cartonSize')) || 0;
+            return 1;
+        }
+
+        // يحسب سعر الوحدة = سعر القطعة × عدد القطع في الوحدة، ويكتبه في الخانة.
+        // force=true معناه المستخدم غيّر الوحدة بنفسه — وقتها نعيد الحساب حتى لو كان
+        // كاتب سعر قبل كده (لأن تغيير الوحدة معناه سعر جديد).
+        function applyUnitPrice($row, force) {
+            var $price = $row.find('input[name$="-unit_price"]').first();
+            if ($price.length === 0) return;
+            if (!force && isUserPriced($price)) return;
+            var piece = parseFloat($row.data('piecePrice'));
+            if (isNaN(piece) || piece <= 0) return;
+            var factor = unitFactor($row);
+            if (factor <= 0) return;  // كرتونة من غير عدد قطع — مفيش سعر
+            var val = (piece * factor).toFixed(2);
+            $price.val(val);
+            $price.data('userEdited', false);  // ده سعر تلقائي مش يدوي
+            $price.trigger('change');
+        }
+
         function fetchAndApply(itemId, variantId, $row) {
             var $price = $row.find('input[name$="-unit_price"]').first();
             if ($price.length === 0) return;
-            // لو المستخدم كتب السعر بنفسه، بلاش نجيب سعر الوصفة فوقه.
-            if (isUserPriced($price)) return;
             var url = '/sales/item/' + itemId + '/price/';
             if (variantId) url += '?variant=' + variantId;
             $.getJSON(url)
                 .done(function (data) {
                     console.log('[Roma] price endpoint →', data);
-                    // إعادة فحص بعد رجوع الطلب (async): لو المستخدم كتب سعر في الوقت ده،
-                    // منكتبش فوقه — ده كان بيحصل بسبب السباق (race) ويمسح السعر اليدوي.
-                    if (isUserPriced($price)) return;
-                    // نعبّي بس لما الوصفة فيها سعر فعلي (> 0). صفر (مفيش سعر) منكتبش بيه
-                    // فوق سعر المستخدم اليدوي.
-                    if (data && data.unit_price && parseFloat(data.unit_price) > 0) {
-                        $price.val(data.unit_price);
-                        $price.trigger('change');
-                    }
+                    if (!data) return;
+                    // خزّن سعر القطعة وأحجام الوحدات على الصف عشان نحسب فوراً عند تغيير الوحدة.
+                    $row.data('piecePrice', data.piece_price || data.unit_price);
+                    $row.data('dozenSize', data.dozen_size || 12);
+                    $row.data('cartonSize', data.carton_size || 0);
+                    applyUnitPrice($row, false);
                 })
                 .fail(function (xhr) {
                     console.error('[Roma] price endpoint failed:', xhr.status, xhr.statusText);
@@ -77,6 +97,18 @@
         $(document).on('select2:select', 'select[name$="-item"]', function () { onItemChange(this); });
         $(document).on('change', 'select[name$="-variant"]', function () { onVariantChange(this); });
         $(document).on('select2:select', 'select[name$="-variant"]', function () { onVariantChange(this); });
+
+        // لما المستخدم يغيّر وحدة البيع (قطعة/دستة/كرتونة) → نعيد حساب السعر على حسب الوحدة.
+        $(document).on('change', 'select[name$="-sale_unit"]', function () {
+            var $row = findRow($(this));
+            // لو لسه ما جبناش سعر القطعة لهذا الصف (مثلاً فتحنا فاتورة قديمة)، نجيبه الأول.
+            if ($row.data('piecePrice') === undefined) {
+                var itemId = $row.find('select[name$="-item"]').val();
+                var variantId = $row.find('select[name$="-variant"]').val();
+                if (itemId && variantId) { fetchAndApply(itemId, variantId, $row); return; }
+            }
+            applyUnitPrice($row, true);
+        });
 
         // أول ما المستخدم يكتب في خانة السعر بإيده، نعلّمها "ملك المستخدم" فميتكتبش فوقها تلقائياً.
         // ولو فضّاها بإيده تاني، نفكّ القفل عشان يقدر يرجّع سعر المنتج لو اختار مقاس.
