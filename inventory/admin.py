@@ -41,13 +41,13 @@ class ItemVariantForm(forms.ModelForm):
 class ItemVariantInline(admin.TabularInline):
     """SKUs (المقاسات).
 
-    منتج مُصنّع (له منتج رئيسي): للعرض فقط — المقاسات والسعر بييجوا من وصفة المنتج الرئيسي.
-    منتج تجاري (من غير منتج رئيسي): قابل للإضافة والتعديل — تكتب المقاس وسعر البيع بإيدك،
-    والتكلفة بتتحدّد من فاتورة شراء المنتجات التامة (متوسط مرجّح)."""
+    تابع لمنتج رئيسي «تصنيع»: للعرض فقط — المقاسات والسعر بييجوا من وصفة المنتج الرئيسي.
+    تابع لمنتج رئيسي «تام» (أو من غير رئيسي): قابل للإضافة والتعديل — تكتب المقاس وسعر البيع
+    بإيدك، والتكلفة بتتحدّد من فاتورة شراء المنتجات التامة (متوسط مرجّح)."""
     model = ItemVariant
     form = ItemVariantForm
     extra = 0
-    # full read-only set (manufactured item) vs editable set (trading item)
+    # full read-only set (manufactured item) vs editable set (finished/trading item)
     _ALL = ('size', 'sku_code', 'selling_price', 'dozen_price_col',
             'current_stock', 'average_cost', 'barcode', 'reorder_level')
     _COMPUTED = ('sku_code', 'dozen_price_col', 'current_stock', 'average_cost')
@@ -55,8 +55,13 @@ class ItemVariantInline(admin.TabularInline):
 
     @staticmethod
     def _is_trading(obj):
-        # New item (obj=None) or an item with no main product → trading (editable).
-        return obj is None or obj.product_id is None
+        # Editable when the item is FINISHED/trading: a new item, an item with no
+        # main product, or an item whose main product is FINISHED (bought ready).
+        # Read-only only when the main product is MANUFACTURING (sizes come from
+        # its recipe).
+        if obj is None or obj.product_id is None:
+            return True
+        return obj.product.product_type == 'FINISHED'
 
     def has_add_permission(self, request, obj=None):
         return self._is_trading(obj)
@@ -97,24 +102,48 @@ class ProductSizeRecipeInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(StayOnPageMixin, admin.ModelAdmin):
-    list_display = ('code', 'name_ar', 'fabric_type', 'dozen_size', 'sub_products_count',
-                    'recipe_sizes_count', 'active')
+    list_display = ('code', 'name_ar', 'product_type', 'wholesale_unit', 'fabric_type',
+                    'sub_products_count', 'recipe_sizes_count', 'active')
     list_display_links = ('code', 'name_ar')
-    list_filter = ('active', 'fabric_type', 'category')
+    list_filter = ('product_type', 'active', 'fabric_type', 'category')
     search_fields = ('code', 'name_ar', 'name_en')
     readonly_fields = ('code',)
     autocomplete_fields = ('fabric_type',)
     inlines = [ProductSizeRecipeInline]
     fieldsets = (
         ('بيانات المنتج', {
-            'fields': ('code', 'name_ar', 'name_en', 'category', 'fabric_type',
-                       'dozen_size', 'waste_pct', 'accessory_waste_pct', 'notes', 'active'),
-            'description': 'المنتج الرئيسي بيحدد كل حاجة: المقاسات، نوع القماش/الخامة، '
-                           'عدد القطع في الدستة، نسبتي هالك القماش والإكسسوارات على المنتج كله، '
-                           'واستهلاك القماش/الإكسسوارات/المصنعية والسعر لكل مقاس (في جدول الوصفة تحت). '
-                           'المنتجات الفرعية بتاخد كل ده تلقائياً.',
+            'fields': ('code', 'name_ar', 'name_en', 'product_type', 'category',
+                       'notes', 'active'),
+            'description': 'اختار «نوع المنتج»: «تصنيع» له وصفة وبيتصنّع؛ «تام» بيتشترى جاهز '
+                           '— ولو اخترت «تام» هيتعمل منتج فرعي تلقائي بنفس الاسم تبيع منه.',
+        }),
+        ('وحدة الجملة', {
+            'fields': ('wholesale_unit', 'wholesale_unit_size', 'dozen_size'),
+            'description': 'وحدة البيع بالجملة (دستة/كرتونة) + عدد القطع فيها — بتظهر في '
+                           'الفاتورة جنب «قطعة».',
+        }),
+        ('وصفة التصنيع (للمنتج التصنيع فقط)', {
+            'fields': ('fabric_type', 'waste_pct', 'accessory_waste_pct'),
+            'description': 'نوع القماش ونسبتي الهالك — بتتطبّق على منتجات التصنيع وبتغذّي '
+                           'جدول الوصفة لكل مقاس تحت. سيبها فاضية للمنتج التام.',
         }),
     )
+
+    def get_inline_instances(self, request, obj=None):
+        # وصفة المقاسات تظهر لمنتجات التصنيع بس (المنتج التام مالوش وصفة).
+        if obj is not None and obj.product_type == 'FINISHED':
+            return []
+        return super().get_inline_instances(request, obj)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        product = form.instance
+        # منتج تام: اعمل منتج فرعي تلقائي بنفس الاسم (لو لسه مفيش) عشان تبيع منه.
+        if product.product_type == 'FINISHED' and not product.sub_products.exists():
+            Item.objects.create(product=product, name_ar=product.name_ar,
+                                category=product.category)
+            messages.info(request,
+                          f'اتعمل منتج فرعي تلقائي «{product.name_ar}» — ضيف مقاساته وأسعاره منه.')
 
     def sub_products_count(self, obj):
         return obj.sub_products.count()
@@ -134,11 +163,11 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
     search_fields = ('code', 'name_ar', 'name_en')
     autocomplete_fields = ('product',)
     inlines = [ItemVariantInline]
-    readonly_fields = ('code', 'image_preview', 'inherited_summary')
+    readonly_fields = ('code', 'image_preview', 'inherited_summary', 'sub_type_note')
     fieldsets = (
         ('بيانات المنتج الفرعي', {
-            'fields': ('product', 'inherited_summary', 'code', 'name_ar',
-                       'fabric_color', 'carton_size', 'active'),
+            'fields': ('product', 'sub_type_note', 'inherited_summary', 'code', 'name_ar',
+                       'fabric_color', 'active'),
             'description': 'المنتج الفرعي = اسم بيعي + صورة + لون القماش. اختار «المنتج الرئيسي» '
                            'وهو هيجيب المقاسات والأسعار والوصفة (قماش/إكسسوارات/مصنعية) '
                            'تلقائياً — المقاسات بتظهر تحت كـ SKUs للعرض فقط. '
@@ -166,6 +195,17 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
             'مقاسات بوصفة (SKUs هتتولّد): <b>{}</b>'
             '</div>', fabric, p.dozen_size, sizes)
     inherited_summary.short_description = 'بيتورّث من المنتج الرئيسي'
+
+    def sub_type_note(self, obj):
+        """كل المنتجات الفرعية «منتج تام» (طبقة البيع) — للتوضيح فقط."""
+        kind = ('تابع لمنتج رئيسي «تصنيع» — مقاساته وأسعاره بتيجي من الوصفة.'
+                if obj and obj.product_id and obj.product.product_type == 'MANUFACTURING'
+                else 'تام بيتشترى جاهز — تكتب مقاساته وسعره بإيدك.')
+        return format_html(
+            '<span style="background:#e7f5ec;color:#15803d;font-weight:700;'
+            'padding:2px 8px;border-radius:4px;">منتج تام (قابل للبيع)</span>'
+            '<span style="color:#666;font-size:11px;margin-right:6px;">— {}</span>', kind)
+    sub_type_note.short_description = 'النوع'
 
     def variants_count(self, obj):
         return obj.variants.count()

@@ -50,7 +50,7 @@
             <td>
                 {% if line.variant %}مقاس {{ line.variant.size }}{% endif %}
             </td>
-            <td class="num">{{ line.get_sale_unit_display }}</td>
+            <td class="num">{{ line.sale_unit_label }}</td>
             <td class="num">{{ line.quantity|money:0 }}</td>
             <td class="num">{{ line.unit_price|money:2 }}</td>
             <td class="num">{{ line.line_total|money:2 }}</td>

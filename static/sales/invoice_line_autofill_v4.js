@@ -29,12 +29,19 @@
             return $price.data('userEdited') === true;
         }
 
-        // عدد القطع في وحدة البيع المختارة في الصف (قطعة=1، دستة=dozen، كرتونة=carton).
+        // عدد القطع في وحدة البيع المختارة في الصف (قطعة=1، وحدة الجملة=حجم وحدة جملة المنتج).
         function unitFactor($row) {
             var unit = $row.find('select[name$="-sale_unit"]').val() || 'PIECE';
-            if (unit === 'DOZEN') return parseFloat($row.data('dozenSize')) || 12;
-            if (unit === 'CARTON') return parseFloat($row.data('cartonSize')) || 0;
+            if (unit === 'WHOLESALE') return parseFloat($row.data('wholesaleSize')) || 0;
             return 1;
+        }
+
+        // يعيد تسمية خيار «وحدة الجملة» في القائمة لاسم وحدة المنتج الفعلي (دستة/كرتونة).
+        function relabelWholesale($row) {
+            var lbl = $row.data('wholesaleLabel');
+            if (!lbl) return;
+            $row.find('select[name$="-sale_unit"] option[value="WHOLESALE"]')
+                .text('وحدة الجملة (' + lbl + ')');
         }
 
         // يحسب سعر الوحدة = سعر القطعة × عدد القطع في الوحدة، ويكتبه في الخانة.
@@ -63,10 +70,11 @@
                 .done(function (data) {
                     console.log('[Roma] price endpoint →', data);
                     if (!data) return;
-                    // خزّن سعر القطعة وأحجام الوحدات على الصف عشان نحسب فوراً عند تغيير الوحدة.
+                    // خزّن سعر القطعة + وحدة جملة المنتج على الصف عشان نحسب فوراً عند تغيير الوحدة.
                     $row.data('piecePrice', data.piece_price || data.unit_price);
-                    $row.data('dozenSize', data.dozen_size || 12);
-                    $row.data('cartonSize', data.carton_size || 0);
+                    $row.data('wholesaleSize', data.wholesale_unit_size || 0);
+                    $row.data('wholesaleLabel', data.wholesale_unit_label || 'دستة');
+                    relabelWholesale($row);
                     applyUnitPrice($row, false);
                 })
                 .fail(function (xhr) {

@@ -25,10 +25,30 @@ class Product(models.Model):
     """منتج رئيسي (مجموعة) — مثال: «تيشرت أندية». تحته منتجات فرعية (Item) قابلة
     للبيع والتخزين، والوصفة (قماش + هالك + إكسسوارات + مصنعية) لكل مقاس بتتعرّف على
     المنتج الرئيسي وبتغذّي أوامر إنتاج كل المنتجات الفرعية التابعة له."""
+    PRODUCT_TYPE_CHOICES = [
+        ('MANUFACTURING', 'منتج تصنيع'),
+        ('FINISHED', 'منتج تام'),
+    ]
+    WHOLESALE_UNIT_CHOICES = [
+        ('DOZEN', 'دستة'),
+        ('CARTON', 'كرتونة'),
+    ]
     code = models.CharField('كود المنتج', max_length=20, unique=True, blank=True,
                             help_text='سيب الخانة فاضية وهيتولّد تلقائياً (PRD-0001, PRD-0002 ...)')
     name_ar = models.CharField('اسم المنتج', max_length=200)
     name_en = models.CharField('Name (English)', max_length=200, blank=True)
+    product_type = models.CharField('نوع المنتج', max_length=15, choices=PRODUCT_TYPE_CHOICES,
+                                    default='MANUFACTURING',
+                                    help_text='«تصنيع» = له وصفة وبيتصنّع بأوامر إنتاج. '
+                                              '«تام» = بيتشترى جاهز ويتباع زي ما هو. لو اخترت «تام» '
+                                              'هيتعمل منتج فرعي تلقائي بنفس الاسم تقدر تبيع منه.')
+    wholesale_unit = models.CharField('وحدة الجملة', max_length=10, choices=WHOLESALE_UNIT_CHOICES,
+                                      default='DOZEN',
+                                      help_text='الوحدة اللي بتبيع بيها بالجملة — دستة ولا كرتونة. '
+                                                'بتظهر في الفاتورة جنب «قطعة».')
+    wholesale_unit_size = models.PositiveSmallIntegerField('عدد القطع في وحدة الجملة', default=12,
+                                                           help_text='كام قطعة في وحدة الجملة '
+                                                                     '(الدستة أو الكرتونة).')
     category = models.CharField('الفئة', max_length=100, blank=True)
     fabric_type = models.ForeignKey('manufacturing.FabricType', null=True, blank=True,
                                     on_delete=models.PROTECT, related_name='products',
@@ -98,10 +118,6 @@ class Item(models.Model):
     dozen_size = models.PositiveSmallIntegerField('عدد القطع في الدستة', default=12,
                                                      help_text='الدستة = الوحدة الافتراضية للبيع. '
                                                                'مقاس واحد فيها 12 قطعة عادة.')
-    carton_size = models.PositiveSmallIntegerField('عدد القطع في الكرتونة', default=0,
-                                                   help_text='كام قطعة في الكرتونة — لازم تتحدد لو هتبيع '
-                                                             'الصنف ده بالكرتونة في الفاتورة (سيبها صفر لو '
-                                                             'مش بتبيع بالكرتونة).')
     image = models.ImageField('الصورة', upload_to='items/', blank=True, null=True)
     active = models.BooleanField('نشط', default=True)
     created_at = models.DateTimeField(auto_now_add=True)

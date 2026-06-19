@@ -37,11 +37,13 @@ def item_default_price(request, pk):
             v = None
         if v is not None:
             piece = Decimal(v.selling_price or 0).quantize(Decimal('0.01'))
+            p = it.product
             return JsonResponse({
                 'unit_price': str(piece),          # السعر الافتراضي = القطعة
                 'piece_price': str(piece),
-                'dozen_size': it.dozen_size or 12,
-                'carton_size': it.carton_size or 0,
+                'wholesale_unit': (p.wholesale_unit if p else 'DOZEN'),
+                'wholesale_unit_label': (p.get_wholesale_unit_display() if p else 'دستة'),
+                'wholesale_unit_size': (p.wholesale_unit_size if p else 12),
                 'item_code': it.code,
                 'item_name_ar': it.name_ar,
                 'sale_type': 'piece',
