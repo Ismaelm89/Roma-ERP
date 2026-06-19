@@ -133,6 +133,25 @@
         // يعني بنقفل الأسعار المحفوظة قبل ما domain_filters تعيد إطلاق أحداث الـ change.
         $(function () { lockExistingPrices(); });
 
+        // ============================================================
+        // خانة حذف السطر — نوضّحها (أحمر + كلمة «حذف») عشان المستخدم يلاقيها بسهولة.
+        // البند بيتمسح فعلياً لما تعلّم الخانة وتدوس «حفظ» (للفواتير المسودة بس).
+        // ============================================================
+        function labelDeleteBoxes() {
+            $('input[type="checkbox"][name$="-DELETE"]').each(function () {
+                var $box = $(this);
+                if ($box.data('romaDelLabeled')) return;
+                $box.data('romaDelLabeled', true);
+                if ($box.next('.roma-del-lbl').length === 0) {
+                    $box.after('<span class="roma-del-lbl" style="color:#b71c1c;'
+                        + 'font-weight:700;font-size:11px;margin-right:4px;white-space:nowrap;">'
+                        + '🗑 حذف</span>');
+                }
+            });
+        }
+        $(function () { labelDeleteBoxes(); });
+        $(document).on('formset:added', function () { labelDeleteBoxes(); });
+
         console.log('[Roma] delegation bound (item + variant + price-lock + existing-lock)');
     });
 })();
