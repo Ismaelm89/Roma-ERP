@@ -38,11 +38,11 @@ def post_sales_invoice(invoice, user=None):
 
     for line in lines:
         if line.quantity <= 0:
-            raise PostingError('عدد الدستات يجب أن يكون أكبر من صفر.')
+            raise PostingError('عدد القطع يجب أن يكون أكبر من صفر.')
         if line.unit_price < 0:
-            raise PostingError('سعر الدستة لا يمكن أن يكون سالباً.')
+            raise PostingError('سعر القطعة لا يمكن أن يكون سالباً.')
         if not line.variant_id:
-            raise PostingError('لازم تختار المقاس في كل بند (البيع بالدستة من مقاس محدد).')
+            raise PostingError('لازم تختار المقاس في كل بند (البيع بالقطعة من مقاس محدد).')
         line.recalc()
 
     # ----- Item 4a: امنع البيع لو الرصيد مش كفاية -----

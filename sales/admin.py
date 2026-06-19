@@ -43,9 +43,9 @@ class CustomerAdmin(admin.ModelAdmin):
 class SalesInvoiceLineInline(LockedInlineMixin, admin.TabularInline):
     model = SalesInvoiceLine
     extra = 1
-    # Dozen sales: pick the product (by name), then the size, enter number of
-    # dozens, price auto-fills. The size dropdown is narrowed to the chosen
-    # product's sizes by domain_filters_v4.js.
+    # Piece sales: pick the product (by name), then the size, enter number of
+    # pieces, price auto-fills (piece selling price). The size dropdown is
+    # narrowed to the chosen product's sizes by domain_filters_v4.js.
     fields = ('item', 'variant', 'quantity', 'unit_price', 'line_total')
     autocomplete_fields = ('item',)
     readonly_fields = ('line_total',)

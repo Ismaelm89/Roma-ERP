@@ -34,9 +34,9 @@
             <th>#</th>
             <th>الكود</th>
             <th>الصنف</th>
-            <th>المقاس / الدستة</th>
-            <th class="num">عدد الدستات</th>
-            <th class="num">سعر الدستة</th>
+            <th>المقاس</th>
+            <th class="num">عدد القطع</th>
+            <th class="num">سعر القطعة</th>
             <th class="num">الإجمالي</th>
         </tr>
     </thead>
@@ -48,9 +48,8 @@
             <td>{{ line.item.name_ar }}</td>
             <td>
                 {% if line.variant %}مقاس {{ line.variant.size }}{% endif %}
-                <span class="muted">({{ line.dozen_size }} قطعة/دستة = {{ line.total_pieces|money:0 }} قطعة)</span>
             </td>
-            <td class="num">{{ line.quantity }} دستة</td>
+            <td class="num">{{ line.quantity|money:0 }} قطعة</td>
             <td class="num">{{ line.unit_price|money:2 }}</td>
             <td class="num">{{ line.line_total|money:2 }}</td>
         </tr>
