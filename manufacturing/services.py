@@ -1081,6 +1081,87 @@ def cancel_production_order(order: ProductionOrder, user=None):
     return order
 
 
+@transaction.atomic
+def uncomplete_production_order(order: ProductionOrder, user=None):
+    """عكس أمر إنتاج «مكتمل» ورجوعه لمرحلة «خطة» (DRAFT).
+
+    بيعكس كل آثار produce_production_order في معاملة واحدة:
+      1) القماش: يرجّع الكميات المخصومة لدفعاتها ويمسح حركات الصرف والاستهلاك.
+      2) الإكسسوارات: يرجّع الكميات لرصيد المخزون ويلغي علامة الترحيل.
+      3) المنتج التام: يخصم الكميات المنتَجة من أصناف المنتج الحالي (order.item)
+         ويمسح حركات المخزون بتاعة الأمر.
+      4) القيد: يمسح قيد الإكمال (يعكس كل أرصدة GL تلقائياً).
+      5) الحالة: يرجّعها DRAFT ويصفّر بيانات الإفراج/الإكمال.
+
+    ملاحظة: المنتج التام بيتخصم من order.item الحالي — لو الأمر اتعاد تصنيفه
+    لمنتج فرعي تاني، بيتعامل صح لأن الكميات بترجع من نفس المنتج اللي اتباع منه.
+    """
+    from inventory.models import ItemVariant, StockMovement
+
+    if order.status != 'COMPLETED':
+        raise FabricPostingError(
+            f'أمر {order.order_no}: لا يمكن «إلغاء الإكمال» إلا لأمر مكتمل '
+            f'(حالته الآن: {order.get_status_display()}).'
+        )
+
+    # 1) القماش: رجّع المخصوم لكل دفعة، وامسح حركات + استهلاكات هذا الأمر.
+    fabric_usages = list(order.fabric_usages.filter(batch__isnull=False)
+                         .select_related('batch'))
+    batch_ids = sorted({u.batch_id for u in fabric_usages})
+    locked = {b.id: b for b in
+              FabricBatch.objects.select_for_update().filter(id__in=batch_ids)}
+    for u in fabric_usages:
+        b = locked[u.batch_id]
+        b.in_stock_qty_kg = Decimal(b.in_stock_qty_kg) + Decimal(u.actual_qty_kg or 0)
+        b.save(update_fields=['in_stock_qty_kg'])
+    FabricMovement.objects.filter(
+        document_type='ProductionOrder', document_id=order.id,
+        movement_type='ISSUE_TO_PRODUCTION').delete()
+    order.fabric_usages.all().delete()
+
+    # 2) الإكسسوارات: رجّع الكميات لرصيد المخزون، وامسح بنود الاستهلاك بالكامل
+    #    عشان الإنتاج الجديد يعيد تحميلها من الوصفة الجديدة (مش يحتفظ بالكميات القديمة).
+    for au in order.accessory_usages.select_related('accessory').all():
+        if au.is_posted and Decimal(au.actual_qty or 0) > 0:
+            acc = Accessory.objects.select_for_update().get(pk=au.accessory_id)
+            acc.current_stock = Decimal(acc.current_stock or 0) + Decimal(au.actual_qty or 0)
+            acc.save(update_fields=['current_stock'])
+    order.accessory_usages.all().delete()
+
+    # 3) المنتج التام: اخصم الكميات المنتَجة من أصناف المنتج الحالي.
+    by_size = {}
+    for s in order.sizes.select_related('size').all():
+        if s.quantity > 0:
+            by_size[s.size.code] = by_size.get(s.size.code, 0) + s.quantity
+    for size_code, qty in by_size.items():
+        v = ItemVariant.objects.select_for_update().filter(
+            item=order.item, size=size_code).first()
+        if v:
+            v.current_stock = Decimal(v.current_stock or 0) - Decimal(qty)
+            v.save(update_fields=['current_stock'])
+    StockMovement.objects.filter(
+        document_type='ProductionOrder', document_id=order.id).delete()
+
+    # 4) القيد: امسح قيد الإكمال (يعكس كل أرصدة GL).
+    je = order.completed_journal_entry
+    if je is not None:
+        je.delete()
+
+    # 5) الحالة: رجوع لمرحلة الخطة + تصفير بيانات الإفراج/الإكمال.
+    order.status = 'DRAFT'
+    order.released_at = None
+    order.released_by = None
+    order.released_journal_entry = None
+    order.completed_at = None
+    order.completed_by = None
+    order.completed_journal_entry = None
+    order.save(update_fields=[
+        'status', 'released_at', 'released_by', 'released_journal_entry',
+        'completed_at', 'completed_by', 'completed_journal_entry',
+    ])
+    return order
+
+
 # ============================================================
 #  7) Complete production order (Phase 2d)
 # ============================================================

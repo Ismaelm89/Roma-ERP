@@ -26,6 +26,7 @@ from .services import (
     post_accessory_purchase,
     post_accessory_purchase_invoice,
     produce_production_order, cancel_production_order,
+    uncomplete_production_order,
     apply_recipe_to_order, refresh_planned_fabric_usage,
     post_wage_payment, mfg_wages_accrued_balance,
     FabricPostingError,
@@ -724,7 +725,8 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
                ProductionPrintingInline, ProductionOperationInline,
                ProductionQualityInline, ProductionIroningInline,
                AccessoryUsageInline]
-    actions = ('action_load_recipe', 'action_produce', 'action_cancel')
+    actions = ('action_load_recipe', 'action_produce', 'action_cancel',
+               'action_uncomplete')
     change_form_template = 'admin/manufacturing/productionorder/change_form.html'
 
     class Media:
@@ -912,6 +914,23 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
                 err += 1
         if ok:
             self.message_user(request, f'تم إلغاء {ok} أمر.', level=messages.SUCCESS)
+
+    @admin.action(description='↩️ رجوع لمرحلة خطة (إلغاء إكمال أمر مكتمل)')
+    def action_uncomplete(self, request, queryset):
+        ok = err = 0
+        for o in queryset:
+            try:
+                uncomplete_production_order(o, user=request.user)
+                ok += 1
+            except FabricPostingError as e:
+                self.message_user(request, f'{o.order_no}: {e}', level=messages.ERROR)
+                err += 1
+        if ok:
+            self.message_user(
+                request,
+                f'تم إرجاع {ok} أمر لمرحلة الخطة (رجع القماش والإكسسوارات وشال '
+                f'المنتج التام وعكس القيود).',
+                level=messages.SUCCESS)
 
     def response_add(self, request, obj, post_url_continue=None):
         if '_save_and_load_recipe' in request.POST:
