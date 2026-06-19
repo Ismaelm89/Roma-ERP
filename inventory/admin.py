@@ -263,7 +263,9 @@ class StockMovementAdmin(admin.ModelAdmin):
 class _VariantWholesaleSelect(forms.Select):
     """Select بيحط data-wholesale (اسم وحدة الجملة للمنتج) على كل option، عشان الـJS
     يعيد تسمية خيار «وحدة الجملة» في خانة وحدة الشراء لاسم الوحدة الفعلي (دستة/كرتونة)."""
-    wholesale = {}
+    def __init__(self, *args, wholesale=None, **kwargs):
+        self.wholesale = wholesale or {}
+        super().__init__(*args, **kwargs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex, attrs)
@@ -273,36 +275,28 @@ class _VariantWholesaleSelect(forms.Select):
         return option
 
 
-class FinishedGoodsPurchaseLineForm(forms.ModelForm):
-    """يقصر اختيار الصنف على مقاسات المنتجات «التام» بس (اللي بتتشترى جاهزة)."""
-    class Meta:
-        model = FinishedGoodsPurchaseLine
-        fields = '__all__'
-        widgets = {'variant': _VariantWholesaleSelect}
+class FinishedGoodsPurchaseLineInline(admin.TabularInline):
+    model = FinishedGoodsPurchaseLine
+    extra = 1
+    fields = ('variant', 'purchase_unit', 'quantity', 'unit_cost', 'line_total_display', 'is_posted')
+    readonly_fields = ('line_total_display', 'is_posted')
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'variant' in self.fields:
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # اقصر الصنف على مقاسات المنتجات «التام» بس + علّم كل option بوحدة جملته.
+        if db_field.name == 'variant':
             qs = (ItemVariant.objects
                   .filter(item__product__product_type='FINISHED')
                   .select_related('item', 'item__product')
                   .order_by('item__name_ar', 'size'))
-            self.fields['variant'].queryset = qs
-            self.fields['variant'].label_from_instance = \
-                lambda v: f'{v.item.name_ar} — {v.size}'
-            self.fields['variant'].widget.wholesale = {
+            kwargs['queryset'] = qs
+            kwargs['widget'] = _VariantWholesaleSelect(wholesale={
                 str(v.pk): (v.item.product.get_wholesale_unit_display()
                             if v.item.product_id else 'دستة')
-                for v in qs
-            }
-
-
-class FinishedGoodsPurchaseLineInline(admin.TabularInline):
-    model = FinishedGoodsPurchaseLine
-    form = FinishedGoodsPurchaseLineForm
-    extra = 1
-    fields = ('variant', 'purchase_unit', 'quantity', 'unit_cost', 'line_total_display', 'is_posted')
-    readonly_fields = ('line_total_display', 'is_posted')
+                for v in qs})
+        formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == 'variant' and formfield is not None:
+            formfield.label_from_instance = lambda v: f'{v.item.name_ar} — {v.size}'
+        return formfield
 
     def line_total_display(self, obj):
         if not obj or not obj.pk:
