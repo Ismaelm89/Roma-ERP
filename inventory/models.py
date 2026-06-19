@@ -85,10 +85,13 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         from core.serials import assign_if_blank
         assign_if_blank(self, 'code', 'PRD-', 4)
+        # وحدة الجملة بقت هي المصدر الوحيد — «عدد القطع في الدستة» القديم بيتبعها
+        # تلقائياً عشان الكود الداخلي القديم يفضل متّسق (الخانة اتشالت من الفورم).
+        self.dozen_size = self.wholesale_unit_size or 12
         super().save(*args, **kwargs)
-        # The main product is the authoritative source of the dozen size + the
+        # The main product is the authoritative source of the wholesale unit + the
         # per-size recipe (sizes + selling price). Propagate to every sub-product
-        # so their cached dozen size + SKUs stay in sync.
+        # so their cached unit + SKUs stay in sync.
         for item in self.sub_products.all():
             sync_variants_from_recipe(item)
 

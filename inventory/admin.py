@@ -118,7 +118,7 @@ class ProductAdmin(StayOnPageMixin, admin.ModelAdmin):
                            '— ولو اخترت «تام» هيتعمل منتج فرعي تلقائي بنفس الاسم تبيع منه.',
         }),
         ('وحدة الجملة', {
-            'fields': ('wholesale_unit', 'wholesale_unit_size', 'dozen_size'),
+            'fields': ('wholesale_unit', 'wholesale_unit_size'),
             'description': 'وحدة البيع بالجملة (دستة/كرتونة) + عدد القطع فيها — بتظهر في '
                            'الفاتورة جنب «قطعة».',
         }),
