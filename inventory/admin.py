@@ -260,11 +260,28 @@ class StockMovementAdmin(admin.ModelAdmin):
 # ============================================================
 #  Finished-goods (trading) purchase invoice
 # ============================================================
+class FinishedGoodsPurchaseLineForm(forms.ModelForm):
+    """يقصر اختيار الصنف على مقاسات المنتجات «التام» بس (اللي بتتشترى جاهزة)."""
+    class Meta:
+        model = FinishedGoodsPurchaseLine
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'variant' in self.fields:
+            self.fields['variant'].queryset = (ItemVariant.objects
+                .filter(item__product__product_type='FINISHED')
+                .select_related('item', 'item__product')
+                .order_by('item__name_ar', 'size'))
+            self.fields['variant'].label_from_instance = \
+                lambda v: f'{v.item.name_ar} — {v.size}'
+
+
 class FinishedGoodsPurchaseLineInline(admin.TabularInline):
     model = FinishedGoodsPurchaseLine
+    form = FinishedGoodsPurchaseLineForm
     extra = 1
-    autocomplete_fields = ('variant',)
-    fields = ('variant', 'quantity', 'unit_cost', 'line_total_display', 'is_posted')
+    fields = ('variant', 'purchase_unit', 'quantity', 'unit_cost', 'line_total_display', 'is_posted')
     readonly_fields = ('line_total_display', 'is_posted')
 
     def line_total_display(self, obj):

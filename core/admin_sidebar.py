@@ -42,6 +42,7 @@ SIDEBAR = [
         # وبقت في نفس مكانها تحت PURCHASE.
         ('manufacturing', 'FabricPurchaseInvoice'),
         ('manufacturing', 'AccessoryPurchaseInvoice'),
+        ('inventory', 'FinishedGoodsPurchaseInvoice'),
         ('manufacturing', 'SupplierPayment'),
     ]),
     ('إدارة المصنع', [

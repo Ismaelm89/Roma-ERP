@@ -347,13 +347,20 @@ class FinishedGoodsPurchaseInvoice(models.Model):
 
 
 class FinishedGoodsPurchaseLine(models.Model):
-    """بند في فاتورة شراء منتجات تامة — SKU واحد بكمية وتكلفة."""
+    """بند في فاتورة شراء منتجات تامة — SKU واحد بكمية وتكلفة (بالقطعة أو بوحدة الجملة)."""
+    PURCHASE_UNIT_CHOICES = [('PIECE', 'قطعة'), ('WHOLESALE', 'وحدة الجملة')]
+
     invoice = models.ForeignKey(FinishedGoodsPurchaseInvoice, on_delete=models.CASCADE,
                                 related_name='lines', verbose_name='الفاتورة')
     variant = models.ForeignKey(ItemVariant, on_delete=models.PROTECT,
                                 related_name='purchase_lines', verbose_name='المنتج (SKU)')
-    quantity = models.DecimalField('الكمية', max_digits=12, decimal_places=2)
-    unit_cost = models.DecimalField('تكلفة الوحدة', max_digits=12, decimal_places=4)
+    purchase_unit = models.CharField('وحدة الشراء', max_length=10,
+                                     choices=PURCHASE_UNIT_CHOICES, default='WHOLESALE',
+                                     help_text='بتشتري بالقطعة ولا بوحدة الجملة (دستة/كرتونة). '
+                                               'بيتخزّن في المخزون بالقطعة تلقائياً.')
+    quantity = models.DecimalField('الكمية (بالوحدة)', max_digits=12, decimal_places=2)
+    unit_cost = models.DecimalField('تكلفة الوحدة', max_digits=12, decimal_places=4,
+                                    help_text='تكلفة القطعة أو الكرتونة/الدستة حسب وحدة الشراء.')
     is_posted = models.BooleanField('مرحّل', default=False, editable=False)
 
     class Meta:
@@ -362,6 +369,31 @@ class FinishedGoodsPurchaseLine(models.Model):
 
     def __str__(self):
         return f'{self.variant} × {self.quantity}'
+
+    @property
+    def _product(self):
+        if self.variant_id and self.variant.item_id and self.variant.item.product_id:
+            return self.variant.item.product
+        return None
+
+    @property
+    def unit_factor(self):
+        """عدد القطع في وحدة الشراء (قطعة=1، وحدة الجملة=wholesale_unit_size)."""
+        if self.purchase_unit == 'WHOLESALE':
+            p = self._product
+            return Decimal((p.wholesale_unit_size or 0) if p else 0)
+        return Decimal('1')
+
+    @property
+    def pieces_in(self):
+        """عدد القطع الفعلية اللي هتدخل المخزون = الكمية × عدد القطع في الوحدة."""
+        return (Decimal(self.quantity or 0) * self.unit_factor).quantize(Decimal('0.01'))
+
+    @property
+    def piece_cost(self):
+        """تكلفة القطعة = تكلفة الوحدة ÷ عدد القطع في الوحدة."""
+        f = self.unit_factor
+        return (Decimal(self.unit_cost or 0) / f).quantize(Decimal('0.0001')) if f > 0 else Decimal('0')
 
     @property
     def total_cost(self):

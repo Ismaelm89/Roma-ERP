@@ -98,6 +98,10 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
             raise FinishedGoodsPostingError(f'{p.variant}: الكمية لازم تكون أكبر من صفر.')
         if Decimal(p.unit_cost or 0) < 0:
             raise FinishedGoodsPostingError(f'{p.variant}: تكلفة الوحدة لا يمكن أن تكون سالبة.')
+        if p.purchase_unit == 'WHOLESALE' and p.unit_factor <= 0:
+            raise FinishedGoodsPostingError(
+                f'{p.variant}: حدد «وحدة الجملة» و«عدد القطع فيها» على المنتج الرئيسي '
+                f'الأول عشان تشتري بالجملة.')
 
     inv_acct = get_system_account('INVENTORY')
     je = JournalEntry.objects.create(
@@ -111,20 +115,21 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
     )
     grand_total = Decimal('0')
     for p in lines:
-        qty = Decimal(p.quantity)
-        cost = Decimal(p.unit_cost)
-        line_total = _q(qty * cost)
+        # المخزون بالقطعة: لو الشراء بوحدة جملة، نحوّل لقطع وتكلفة القطعة.
+        pieces = p.pieces_in
+        piece_cost = p.piece_cost
+        line_total = _q(Decimal(p.quantity) * Decimal(p.unit_cost))
         grand_total += line_total
         mv = StockMovement.objects.create(
             variant=p.variant, date=invoice.date, movement_type='PURCHASE_IN',
-            quantity=qty, unit_cost=cost,
+            quantity=pieces, unit_cost=piece_cost,
             document_type='FinishedGoodsPurchase', document_id=invoice.id,
             notes=f'شراء منتج تام — فاتورة {invoice.invoice_no}', created_by=user,
         )
         mv.apply_to_variant()
         JournalLine.objects.create(
             entry=je, account=inv_acct, debit=line_total, credit=Decimal('0'),
-            variant=p.variant, description=f'{p.variant} × {qty}',
+            variant=p.variant, description=f'{p.variant} × {p.quantity} {p.get_purchase_unit_display()}',
         )
         p.is_posted = True
         p.save(update_fields=['is_posted'])
