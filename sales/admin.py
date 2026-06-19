@@ -46,9 +46,30 @@ class SalesInvoiceLineInline(LockedInlineMixin, admin.TabularInline):
     # Pick the product (by name), the size, the sale unit (piece/dozen/carton),
     # then the count; price auto-fills (piece price × pieces-per-unit). The size
     # dropdown is narrowed to the chosen product's sizes by domain_filters_v4.js.
-    fields = ('item', 'variant', 'sale_unit', 'quantity', 'unit_price', 'line_total')
+    fields = ('item', 'variant', 'sale_unit', 'quantity', 'unit_price', 'line_total',
+              'after_discount_col', 'cost_col', 'profit_col')
     autocomplete_fields = ('item',)
-    readonly_fields = ('line_total',)
+    readonly_fields = ('line_total', 'after_discount_col', 'cost_col', 'profit_col')
+
+    def after_discount_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.line_total_after_discount)} ج'
+    after_discount_col.short_description = 'بعد خصم التاجر'
+
+    def cost_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.line_cost)} ج'
+    cost_col.short_description = 'تكلفة الصف'
+
+    def profit_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        p = obj.line_profit
+        color = '#15803d' if p >= 0 else '#b91c1c'
+        return format_html('<b style="color:{}">{} ج</b>', color, fmt_money(p))
+    profit_col.short_description = 'ربح الصف'
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'item':

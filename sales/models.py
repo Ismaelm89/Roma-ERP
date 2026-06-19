@@ -315,6 +315,28 @@ class SalesInvoiceLine(models.Model):
     def recalc(self):
         self.line_total = (Decimal(self.quantity) * Decimal(self.unit_price)).quantize(Decimal('0.01'))
 
+    @property
+    def line_total_after_discount(self):
+        """إجمالي البند بعد خصم التاجر (نسبة الخصم على الفاتورة موزّعة على البنود)."""
+        disc = Decimal(self.invoice.doc_discount_percent or 0) if self.invoice_id else Decimal('0')
+        return (Decimal(self.line_total or 0)
+                * (Decimal('1') - disc / Decimal('100'))).quantize(Decimal('0.01'))
+
+    @property
+    def line_cost(self):
+        """تكلفة البضاعة لهذا البند — المرحّلة (cogs_at_posting) أو المقدّرة من متوسط التكلفة."""
+        if self.invoice_id and self.invoice.status == 'POSTED' and self.cogs_at_posting:
+            return Decimal(self.cogs_at_posting).quantize(Decimal('0.01'))
+        if self.variant_id:
+            return (Decimal(self.total_pieces)
+                    * Decimal(self.variant.average_cost or 0)).quantize(Decimal('0.01'))
+        return Decimal('0')
+
+    @property
+    def line_profit(self):
+        """ربح البند = الإجمالي بعد خصم التاجر − تكلفة البضاعة."""
+        return (self.line_total_after_discount - self.line_cost).quantize(Decimal('0.01'))
+
 
 class Receipt(models.Model):
     METHOD_CHOICES = [
