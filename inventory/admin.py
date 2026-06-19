@@ -260,21 +260,41 @@ class StockMovementAdmin(admin.ModelAdmin):
 # ============================================================
 #  Finished-goods (trading) purchase invoice
 # ============================================================
+class _VariantWholesaleSelect(forms.Select):
+    """Select بيحط data-wholesale (اسم وحدة الجملة للمنتج) على كل option، عشان الـJS
+    يعيد تسمية خيار «وحدة الجملة» في خانة وحدة الشراء لاسم الوحدة الفعلي (دستة/كرتونة)."""
+    wholesale = {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        key = str(getattr(value, 'value', value) or '')
+        if key in self.wholesale:
+            option['attrs']['data-wholesale'] = self.wholesale[key]
+        return option
+
+
 class FinishedGoodsPurchaseLineForm(forms.ModelForm):
     """يقصر اختيار الصنف على مقاسات المنتجات «التام» بس (اللي بتتشترى جاهزة)."""
     class Meta:
         model = FinishedGoodsPurchaseLine
         fields = '__all__'
+        widgets = {'variant': _VariantWholesaleSelect}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if 'variant' in self.fields:
-            self.fields['variant'].queryset = (ItemVariant.objects
-                .filter(item__product__product_type='FINISHED')
-                .select_related('item', 'item__product')
-                .order_by('item__name_ar', 'size'))
+            qs = (ItemVariant.objects
+                  .filter(item__product__product_type='FINISHED')
+                  .select_related('item', 'item__product')
+                  .order_by('item__name_ar', 'size'))
+            self.fields['variant'].queryset = qs
             self.fields['variant'].label_from_instance = \
                 lambda v: f'{v.item.name_ar} — {v.size}'
+            self.fields['variant'].widget.wholesale = {
+                str(v.pk): (v.item.product.get_wholesale_unit_display()
+                            if v.item.product_id else 'دستة')
+                for v in qs
+            }
 
 
 class FinishedGoodsPurchaseLineInline(admin.TabularInline):
@@ -317,6 +337,9 @@ class FinishedGoodsPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, adm
     )
     inlines = [FinishedGoodsPurchaseLineInline]
     actions = ('action_post',)
+
+    class Media:
+        js = ('inventory/fgp_unit_relabel.js',)
 
     def total_col(self, obj):
         return f'{fmt_money(obj.total)} ج'

@@ -89,8 +89,9 @@ ADMIN_MODULES = [
         'label': 'المشتريات',
         'items': [
             ('الموردون', 'manufacturing', 'supplier'),
-            ('مشتريات القماش', 'manufacturing', 'fabricbatch'),
-            ('مشتريات الإكسسوارات', 'manufacturing', 'accessorypurchase'),
+            ('مشتريات القماش', 'manufacturing', 'fabricpurchaseinvoice'),
+            ('مشتريات الإكسسوارات', 'manufacturing', 'accessorypurchaseinvoice'),
+            ('شراء المنتجات التامة', 'inventory', 'finishedgoodspurchaseinvoice'),
             ('سندات دفع للموردين', 'manufacturing', 'supplierpayment'),
         ],
     },
