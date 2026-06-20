@@ -102,6 +102,7 @@ ADMIN_MODULES = [
             ('وصفات المنتج', 'manufacturing', 'productsizerecipe'),
             ('أوامر الإنتاج', 'manufacturing', 'productionorder'),
             ('صرف المصنعيات', 'manufacturing', 'manufacturingwagepayment'),
+            ('تسوية المصنعيات (آخر السنة)', 'manufacturing', 'manufacturingwageadjustment'),
             ('الإكسسوارات', 'manufacturing', 'accessory'),
             ('أنواع الأقمشة', 'manufacturing', 'fabrictype'),
             ('ألوان الأقمشة', 'manufacturing', 'fabriccolor'),

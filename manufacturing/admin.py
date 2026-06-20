@@ -17,7 +17,7 @@ from .models import (
     ProductionPrintingRow, ProductionOperationRow, ProductionQualityRow,
     ProductionIroningRow, Accessory, AccessoryUsage, AccessoryPurchase, Size,
     ProductSizeRecipe, ProductSizeAccessory,
-    ManufacturingWagePayment,
+    ManufacturingWagePayment, ManufacturingWageAdjustment,
 )
 from .services import (
     post_fabric_purchase,
@@ -29,6 +29,7 @@ from .services import (
     uncomplete_production_order,
     apply_recipe_to_order, refresh_planned_fabric_usage,
     post_wage_payment, mfg_wages_accrued_balance,
+    post_wage_adjustment,
     FabricPostingError,
 )
 
@@ -539,6 +540,73 @@ class ManufacturingWagePaymentAdmin(StayOnPageMixin, LockAfterPostMixin, admin.M
                 self.message_user(request, f'فشل الترحيل: {e}', level=messages.ERROR)
         return redirect(reverse('admin:manufacturing_manufacturingwagepayment_change',
                                 args=[obj.pk]))
+
+
+@admin.register(ManufacturingWageAdjustment)
+class ManufacturingWageAdjustmentAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin):
+    lock_field = 'status'
+    lock_values = ('POSTED',)
+    unlock_always = ('notes',)
+    list_display = ('adjustment_no', 'date', 'direction_col', 'amount_col', 'status_col')
+    list_filter = ('status', 'direction', 'date')
+    search_fields = ('adjustment_no', 'notes')
+    date_hierarchy = 'date'
+    readonly_fields = ('adjustment_no', 'status', 'journal_entry',
+                       'accrued_balance_display', 'created_at')
+    fieldsets = (
+        ('بيانات التسوية', {'fields': ('adjustment_no', 'date', 'status')}),
+        ('المصنعيات المستحقة حالياً', {
+            'fields': ('accrued_balance_display',),
+            'description': 'ده رصيد «مصنعيات مستحقة» في الميزانية دلوقتي. التسوية بتزوّده '
+                           'أو تنقّصه، والفرق بيروح «فرق مصنعيات» في قائمة الأرباح والخسائر.',
+        }),
+        ('التسوية', {
+            'fields': ('direction', 'amount', 'notes'),
+            'description': '«زيادة» = أنتجت أكتر والمصنعية لازم تزيد (تكلفة أكبر في ق.الدخل). '
+                           '«نقص» = أنتجت أقل والمصنعية تقل (تقليل التكلفة في ق.الدخل). '
+                           'بعد الحفظ، اختار التسوية من القايمة ودوس أكشن «ترحيل التسوية».',
+        }),
+        ('القيد', {'fields': ('journal_entry', 'created_at')}),
+    )
+    actions = ('action_post',)
+
+    def direction_col(self, obj):
+        color = '#dc2626' if obj.direction == 'INCREASE' else '#16a34a'
+        return format_html('<b style="color:{}">{}</b>', color, obj.get_direction_display())
+    direction_col.short_description = 'نوع التسوية'
+
+    def amount_col(self, obj):
+        return f'{fmt_money(obj.amount)} ج'
+    amount_col.short_description = 'المبلغ'
+
+    def status_col(self, obj):
+        colors = {'DRAFT': '#666', 'POSTED': '#16a34a'}
+        return format_html('<b style="color:{}">{}</b>',
+                           colors.get(obj.status, '#000'), obj.get_status_display())
+    status_col.short_description = 'الحالة'
+
+    def accrued_balance_display(self, obj):
+        bal = mfg_wages_accrued_balance()
+        return format_html('<b style="color:#b45309;font-size:16px;">{} ج</b> مستحقة دلوقتي',
+                           fmt_money(bal))
+    accrued_balance_display.short_description = 'مصنعيات مستحقة حالياً'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description='ترحيل التسوية المختارة (قيد فروق مصنعيات → ق.الدخل)')
+    def action_post(self, request, queryset):
+        ok = 0
+        for adj in queryset:
+            try:
+                post_wage_adjustment(adj, user=request.user)
+                ok += 1
+            except FabricPostingError as e:
+                self.message_user(request, f'{adj.adjustment_no}: {e}', level=messages.ERROR)
+        if ok:
+            self.message_user(request, f'تم ترحيل {ok} تسوية مصنعيات.', level=messages.SUCCESS)
 
 
 # ============================================================

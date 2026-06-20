@@ -522,6 +522,44 @@ def post_wage_payment(payment: ManufacturingWagePayment, user=None):
     return je
 
 
+@transaction.atomic
+def post_wage_adjustment(adj, user=None):
+    """ترحيل تسوية مصنعيات آخر الفترة (تسوية محاسبية بدون نقدية):
+        زيادة: DR فرق مصنعيات (5370000) / CR مصنعيات مستحقة (2320000)
+        نقص:   DR مصنعيات مستحقة (2320000) / CR فرق مصنعيات (5370000)
+    الفرق بيأثّر مباشرة في قائمة الأرباح والخسائر عبر «فرق مصنعيات».
+    """
+    if adj.status != 'DRAFT':
+        raise FabricPostingError(f'التسوية {adj.adjustment_no} حالتها {adj.status}، مش DRAFT.')
+    amount = _q(adj.amount)
+    if amount <= 0:
+        raise FabricPostingError('المبلغ لازم يكون أكبر من صفر.')
+
+    accrued_acct = get_system_account('MFG_WAGES_ACCRUED')
+    variance_acct = get_system_account('MFG_WAGES_EXPENSE')
+    je = JournalEntry.objects.create(
+        date=adj.date, reference=adj.adjustment_no,
+        description=f'تسوية مصنعيات — {adj.get_direction_display()} ({adj.adjustment_no})',
+        status='POSTED', source_doc_type='ManufacturingWageAdjustment',
+        source_doc_id=adj.id, created_by=user,
+    )
+    if adj.direction == 'INCREASE':
+        dr_acct, cr_acct = variance_acct, accrued_acct   # تكلفة ↑ في ق.الدخل / التزام ↑
+    else:
+        dr_acct, cr_acct = accrued_acct, variance_acct   # التزام ↓ / تقليل مصروف ق.الدخل
+    JournalLine.objects.create(entry=je, account=dr_acct, debit=amount, credit=Decimal('0'),
+                               description=f'تسوية مصنعيات — {adj.adjustment_no}')
+    JournalLine.objects.create(entry=je, account=cr_acct, debit=Decimal('0'), credit=amount,
+                               description=f'تسوية مصنعيات — {adj.adjustment_no}')
+    je.recalc_totals()
+    if je.total_debit != je.total_credit:
+        raise AssertionError('wage-adjustment JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
+    adj.status = 'POSTED'
+    adj.journal_entry = je
+    adj.save(update_fields=['status', 'journal_entry'])
+    return je
+
+
 # ============================================================
 #  6) Production order: release + cancel
 # ============================================================

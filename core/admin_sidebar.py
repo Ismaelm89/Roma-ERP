@@ -55,6 +55,7 @@ SIDEBAR = [
         ('manufacturing', 'FabricMovement'),
         ('manufacturing', 'ProductionSubModel'),
         ('manufacturing', 'ManufacturingWagePayment'),
+        ('manufacturing', 'ManufacturingWageAdjustment'),
         ('manufacturing', 'ProductSizeRecipe'),
     ]),
 ]

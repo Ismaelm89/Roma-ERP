@@ -1442,3 +1442,52 @@ class ManufacturingWagePayment(models.Model):
         from core.serials import assign_if_blank
         assign_if_blank(self, 'payment_no', 'MW-', 4)
         super().save(*args, **kwargs)
+
+
+# ============================================================
+#  Year-end manufacturing wage adjustment (تسوية مصنعيات)
+# ============================================================
+
+class ManufacturingWageAdjustment(models.Model):
+    """تسوية مصنعيات آخر الفترة — تعديل «مصنعيات مستحقة» (2320000) لأعلى أو لأسفل،
+    والفرق بيروح قائمة الأرباح والخسائر عبر «فرق مصنعيات» (5370000):
+      - زيادة (أنتجت أكتر/المصنعية لازم تزيد):
+            DR فرق مصنعيات (مصروف ↑ في ق.الدخل) / CR مصنعيات مستحقة (التزام ↑)
+      - نقص (أنتجت أقل/المصنعية تقل):
+            DR مصنعيات مستحقة (التزام ↓) / CR فرق مصنعيات (يقلّل مصروف ق.الدخل)
+    تسوية محاسبية فقط — مفيش نقدية. السداد الفعلي بيتم عبر «صرف مصنعيات».
+    """
+    DIRECTION_CHOICES = [
+        ('INCREASE', 'زيادة المصنعيات (تكلفة أكبر)'),
+        ('DECREASE', 'نقص المصنعيات (تكلفة أقل)'),
+    ]
+    STATUS_CHOICES = [
+        ('DRAFT', 'مسودة'),
+        ('POSTED', 'مرحّل'),
+    ]
+    adjustment_no = models.CharField('رقم التسوية', max_length=30, unique=True, blank=True,
+                                     help_text='سيب الخانة فاضية وهيتولّد تلقائياً (MWA-0001 ...)')
+    date = models.DateField('التاريخ')
+    direction = models.CharField('نوع التسوية', max_length=10, choices=DIRECTION_CHOICES,
+                                 default='INCREASE')
+    amount = models.DecimalField('المبلغ', max_digits=14, decimal_places=2)
+    notes = models.TextField('السبب / ملاحظات', blank=True)
+    status = models.CharField('الحالة', max_length=10, choices=STATUS_CHOICES, default='DRAFT')
+    journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+', editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'تسوية مصنعيات'
+        verbose_name_plural = 'تسويات المصنعيات (آخر السنة)'
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return f'{self.adjustment_no} — {self.get_direction_display()} ({self.amount})'
+
+    def save(self, *args, **kwargs):
+        from core.serials import assign_if_blank
+        assign_if_blank(self, 'adjustment_no', 'MWA-', 4)
+        super().save(*args, **kwargs)
