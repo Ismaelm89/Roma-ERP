@@ -4,8 +4,9 @@
 {% block content %}
 <div class="header-grid">
     <div class="company-block">
-        <h1>كشف حساب عميل</h1>
-        <div class="muted">حتى {{ today|date:"d/m/Y" }}</div>
+        {% if company.logo %}<img src="{{ company.logo.url }}" class="logo" alt="logo">{% endif %}
+        <h1>{{ company.name_ar|default:"Roma" }}</h1>
+        <div class="muted">كشف حساب عميل — حتى {{ today|date:"d/m/Y" }}</div>
     </div>
     <div class="meta-block">
         <div><strong>{{ customer.name_ar }}</strong> ({{ customer.code }})</div>
@@ -15,10 +16,6 @@
 </div>
 
 <div style="display: flex; gap: 16px; margin-bottom: 16px;">
-    <div class="party" style="flex: 1;">
-        <div class="muted">الرصيد الافتتاحي</div>
-        <div style="font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;">{{ customer.opening_balance|money:2 }}</div>
-    </div>
     <div class="party" style="flex: 1; {% if closing_balance > 0 %}background: #fff4f0;{% elif closing_balance < 0 %}background: #f0fff4;{% endif %}">
         <div class="muted">الرصيد الحالي</div>
         <div style="font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; {% if closing_balance > 0 %}color: #b00;{% elif closing_balance < 0 %}color: green;{% endif %}">

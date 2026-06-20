@@ -686,6 +686,7 @@ def customer_ledger(request, pk):
         'rows': rows,
         'closing_balance': running,
         'today': date.today(),
+        'company': Company.objects.first(),
     })
 
 
