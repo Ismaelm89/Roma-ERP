@@ -1329,9 +1329,9 @@ class ProductSizeRecipe(models.Model):
                                         help_text='سعر بيع القطعة الواحدة من المقاس ده. بيتطبّق على '
                                                   'كل المنتجات الفرعية التابعة للمنتج الرئيسي. سعر '
                                                   'الدستة = ده × عدد القطع في الدستة.')
-    reorder_level = models.DecimalField('حد إعادة الطلب (بالدستة)', max_digits=12, decimal_places=2,
+    reorder_level = models.DecimalField('حد إعادة الطلب (بالقطعة)', max_digits=12, decimal_places=2,
                                         default=Decimal('0'),
-                                        help_text='لما رصيد المقاس ده ينزل عن العدد ده من الدستات، '
+                                        help_text='لما رصيد القطع للمقاس ده ينزل عن العدد ده، '
                                                   'يبقى وقت تطلب/تنتج تاني. بيتطبّق على كل المنتجات '
                                                   'الفرعية التابعة للمنتج الرئيسي.')
     notes = models.CharField('ملاحظات', max_length=200, blank=True)

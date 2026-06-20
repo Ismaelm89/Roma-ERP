@@ -206,10 +206,10 @@ class ItemVariant(models.Model):
                                           default=Decimal('0'),
                                           help_text='سعر بيع القطعة الواحدة من المقاس ده. '
                                                     'سعر الدستة = ده × عدد القطع في الدستة.')
-    reorder_level = models.DecimalField('حد إعادة الطلب (بالدستة)', max_digits=12, decimal_places=2,
+    reorder_level = models.DecimalField('حد إعادة الطلب (بالقطعة)', max_digits=12, decimal_places=2,
                                          default=Decimal('0'),
-                                         help_text='لما الرصيد ينزل عن العدد ده من الدستات، '
-                                                   'يبقى وقت تطلب تاني.')
+                                         help_text='لما رصيد القطع ينزل عن العدد ده، '
+                                                   'يبقى وقت تطلب/تنتج تاني.')
     # Numeric rank for size ordering — auto-set in save() from size_sort_key().
     # Numbers first (10, 12, 14...), then letters (S, M, L, XL...). Never edited directly.
     size_order = models.PositiveSmallIntegerField(default=999, editable=False)

@@ -43,6 +43,17 @@ ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', default=['*'])
 
 CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS', default=[])
 
+# في الإنتاج (DEBUG=False) لازم المفتاح السري والمضيفين يكونوا متظبطين صح —
+# نفشل بصوت عالي بدل ما نشتغل بقيمة افتراضية معروفة/غير آمنة.
+if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    if SECRET_KEY.startswith('django-insecure-'):
+        raise ImproperlyConfigured(
+            'لازم تحدّد DJANGO_SECRET_KEY في الإنتاج (المفتاح الافتراضي غير آمن).')
+    if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['*']:
+        raise ImproperlyConfigured(
+            'لازم تحدّد DJANGO_ALLOWED_HOSTS صراحةً في الإنتاج (مش «*»).')
+
 
 # ---------------- Apps + middleware ----------------
 

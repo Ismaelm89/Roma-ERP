@@ -359,6 +359,24 @@ def post_inventory_opening(submitted, date=None):
     ItemVariant.objects.filter(id__in=touched_ids).update(
         current_stock=Decimal('0'), average_cost=Decimal('0'))
 
+    # أصناف كان ليها رصيد افتتاحي قبل كده ومش موجودة في الإدخال الحالي (اتشالت) →
+    # صفّر رصيدها كمان طالما مالهاش حركات فعلية تانية، عشان الكاش مايفضلش قديم بعد
+    # ما اتمسح قيدها المحاسبي.
+    dropped = set(StockMovement.objects
+                  .filter(document_type='Opening:Inventory')
+                  .exclude(variant_id__in=touched_ids)
+                  .values_list('variant_id', flat=True))
+    if dropped:
+        with_real = set(StockMovement.objects
+                        .filter(variant_id__in=dropped)
+                        .exclude(document_type='Opening:Inventory')
+                        .values_list('variant_id', flat=True))
+        safe = dropped - with_real
+        StockMovement.objects.filter(
+            variant_id__in=safe, document_type='Opening:Inventory').delete()
+        ItemVariant.objects.filter(id__in=safe).update(
+            current_stock=Decimal('0'), average_cost=Decimal('0'))
+
     clean = [(v, Decimal(q or 0), Decimal(c or 0)) for v, q, c in submitted
              if Decimal(q or 0) > 0]
     if not clean:
