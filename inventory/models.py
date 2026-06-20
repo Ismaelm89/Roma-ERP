@@ -446,8 +446,11 @@ class StockTakeLine(models.Model):
     """بند جرد — صنف واحد بالكمية الفعلية المعدودة."""
     stock_take = models.ForeignKey(StockTake, on_delete=models.CASCADE,
                                    related_name='lines', verbose_name='الجرد')
+    item = models.ForeignKey(Item, null=True, blank=True, on_delete=models.PROTECT,
+                             related_name='+', verbose_name='الصنف',
+                             help_text='اختار المنتج الأول، وبعدين المقاس هيتفلتر عليه.')
     variant = models.ForeignKey(ItemVariant, on_delete=models.PROTECT,
-                                related_name='stock_take_lines', verbose_name='المنتج (SKU)')
+                                related_name='stock_take_lines', verbose_name='المقاس')
     counted_qty = models.DecimalField('الكمية الفعلية المعدودة', max_digits=12, decimal_places=2)
     system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل', max_digits=12,
                                              decimal_places=2, null=True, blank=True, editable=False)
@@ -459,6 +462,12 @@ class StockTakeLine(models.Model):
 
     def __str__(self):
         return f'{self.variant} — عدّ {self.counted_qty}'
+
+    def save(self, *args, **kwargs):
+        # المقاس (variant) هو المرجع — اشتق منه الصنف عشان يفضلوا متسقين.
+        if self.variant_id:
+            self.item_id = self.variant.item_id
+        super().save(*args, **kwargs)
 
     @property
     def system_qty(self):

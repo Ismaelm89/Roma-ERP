@@ -382,9 +382,21 @@ class FinishedGoodsPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, adm
 class StockTakeLineInline(admin.TabularInline):
     model = StockTakeLine
     extra = 1
-    autocomplete_fields = ('variant',)
-    fields = ('variant', 'counted_qty', 'system_qty_col', 'variance_col', 'variance_value_col')
+    # زي بنود الفاتورة: اختار المنتج (الصنف) الأول، وبعدين المقاس يتفلتر عليه ويعرض المتاح —
+    # عن طريق domain_filters_v4.js اللي بيستدعي /sales/item/<id>/variants/.
+    autocomplete_fields = ('item',)
+    fields = ('item', 'variant', 'counted_qty', 'system_qty_col', 'variance_col', 'variance_value_col')
     readonly_fields = ('system_qty_col', 'variance_col', 'variance_value_col')
+
+    class Media:
+        js = ('sales/domain_filters_v4.js',)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'item':
+            kwargs['empty_label'] = '— اختار المنتج —'
+        if db_field.name == 'variant':
+            kwargs['empty_label'] = '— اختار المقاس —'
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def system_qty_col(self, obj):
         if not obj or not obj.pk:
