@@ -132,8 +132,8 @@ def post_fabric_purchase(batch: FabricBatch, user=None):
         supplier=batch.supplier,
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'fabric purchase JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('fabric purchase JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     # 3. Flag batch posted
     batch.is_posted = True
     batch.purchase_journal_entry = je
@@ -201,8 +201,8 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
         supplier=invoice.supplier,
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'fabric invoice JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('fabric invoice JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     invoice.is_posted = True
     invoice.journal_entry = je
     invoice.save(update_fields=['is_posted', 'journal_entry'])
@@ -298,8 +298,8 @@ def post_accessory_purchase(purchase: AccessoryPurchase, user=None):
             supplier=purchase.supplier,
         )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'accessory purchase JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('accessory purchase JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     _accessory_apply_stock_in(purchase)
 
     purchase.is_posted = True
@@ -371,8 +371,8 @@ def post_accessory_purchase_invoice(invoice: AccessoryPurchaseInvoice, user=None
         supplier=credit_supplier,
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'accessory invoice JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('accessory invoice JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     invoice.is_posted = True
     invoice.journal_entry = je
     invoice.save(update_fields=['is_posted', 'journal_entry'])
@@ -432,8 +432,8 @@ def post_supplier_payment(payment: SupplierPayment, user=None):
         description=f'دفع {payment.get_method_display()} — {payment.payment_no}',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'supplier-payment JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('supplier-payment JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     payment.status = 'POSTED'
     payment.journal_entry = je
     payment.save(update_fields=['status', 'journal_entry'])
@@ -511,8 +511,8 @@ def post_wage_payment(payment: ManufacturingWagePayment, user=None):
         description=f'صرف {payment.get_method_display()} — {payment.payment_no}',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'wage-payment JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('wage-payment JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     payment.status = 'POSTED'
     payment.accrued_portion = accrued_portion
     payment.expense_portion = expense_portion
@@ -616,8 +616,8 @@ def release_production_order(order: ProductionOrder, user=None):
     # DR Inventory / CR WIP entry.
 
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'release JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('release JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     order.status = 'RELEASED'
     order.released_at = timezone.now()
     order.released_by = user
@@ -870,8 +870,8 @@ def produce_production_order(order: ProductionOrder, user=None):
                                  description=f'تصفية WIP — {order.order_no}')
 
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'produce JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('produce JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     now = timezone.now()
     order.status = 'COMPLETED'
     order.released_at = now
@@ -1088,13 +1088,14 @@ def uncomplete_production_order(order: ProductionOrder, user=None):
     بيعكس كل آثار produce_production_order في معاملة واحدة:
       1) القماش: يرجّع الكميات المخصومة لدفعاتها ويمسح حركات الصرف والاستهلاك.
       2) الإكسسوارات: يرجّع الكميات لرصيد المخزون ويلغي علامة الترحيل.
-      3) المنتج التام: يخصم الكميات المنتَجة من أصناف المنتج الحالي (order.item)
-         ويمسح حركات المخزون بتاعة الأمر.
-      4) القيد: يمسح قيد الإكمال (يعكس كل أرصدة GL تلقائياً).
+      3) المنتج التام: يعكس الكميات المنتَجة بحركة صرف (ADJUST_OUT) من أصناف المنتج
+         الحالي — عشان متوسط التكلفة يفضل سليم — بشرط إن الرصيد مازال موجود (لو اتباع
+         بيرفض ويطلب إلغاء الفاتورة الأول).
+      4) القيد: يعمل قيد عكسي (مش حذف) عشان سجل التدقيق يفضل سليم.
       5) الحالة: يرجّعها DRAFT ويصفّر بيانات الإفراج/الإكمال.
 
-    ملاحظة: المنتج التام بيتخصم من order.item الحالي — لو الأمر اتعاد تصنيفه
-    لمنتج فرعي تاني، بيتعامل صح لأن الكميات بترجع من نفس المنتج اللي اتباع منه.
+    ملاحظة: لازم تلغي أي فاتورة باعت من إنتاج الأمر ده قبل إلغاء الإكمال (عشان الرصيد
+    يكون كافي للعكس).
     """
     from inventory.models import ItemVariant, StockMovement
 
@@ -1128,24 +1129,56 @@ def uncomplete_production_order(order: ProductionOrder, user=None):
             acc.save(update_fields=['current_stock'])
     order.accessory_usages.all().delete()
 
-    # 3) المنتج التام: اخصم الكميات المنتَجة من أصناف المنتج الحالي.
+    # 3) المنتج التام: اعكس الكميات المنتَجة بحركة صرف (ADJUST_OUT) — مش خصم مباشر —
+    #    عشان متوسط التكلفة يفضل سليم (الصرف مابيغيّرش المتوسط)، مع حماية من الرصيد
+    #    السالب لو البضاعة اتباعت بالفعل.
     by_size = {}
     for s in order.sizes.select_related('size').all():
         if s.quantity > 0:
             by_size[s.size.code] = by_size.get(s.size.code, 0) + s.quantity
+    variants_by_size = {}
+    shortages = []
     for size_code, qty in by_size.items():
         v = ItemVariant.objects.select_for_update().filter(
             item=order.item, size=size_code).first()
-        if v:
-            v.current_stock = Decimal(v.current_stock or 0) - Decimal(qty)
-            v.save(update_fields=['current_stock'])
-    StockMovement.objects.filter(
-        document_type='ProductionOrder', document_id=order.id).delete()
+        variants_by_size[size_code] = v
+        if v and Decimal(v.current_stock or 0) < Decimal(qty):
+            shortages.append(f'{order.item.name_ar} مقاس {size_code} '
+                             f'(متاح {v.current_stock}، منتَج {qty})')
+    if shortages:
+        raise FabricPostingError(
+            'مينفعش تلغي إكمال الأمر — جزء من البضاعة المنتَجة اتباع بالفعل '
+            '(الرصيد أقل من المنتَج). الغِ الفواتير اللي باعت منها الأول:\n'
+            + '\n'.join('• ' + s for s in shortages))
+    for size_code, qty in by_size.items():
+        v = variants_by_size.get(size_code)
+        if not v:
+            continue
+        rev = StockMovement.objects.create(
+            variant=v, date=timezone.now().date(), movement_type='ADJUST_OUT',
+            quantity=Decimal(qty), unit_cost=Decimal(v.average_cost or 0),
+            document_type='ProductionOrder.Uncomplete', document_id=order.id,
+            notes=f'عكس إنتاج أمر {order.order_no} — مقاس {size_code}', created_by=user,
+        )
+        rev.apply_to_variant()
 
-    # 4) القيد: امسح قيد الإكمال (يعكس كل أرصدة GL).
+    # 4) القيد: اعمل قيد عكسي (مش حذف) عشان نحافظ على سجل التدقيق — زي cancel.
     je = order.completed_journal_entry
     if je is not None:
-        je.delete()
+        rev_je = JournalEntry.objects.create(
+            date=timezone.now().date(),
+            reference=f'إلغاء إكمال {order.order_no}',
+            description=f'عكس قيد إنتاج — {order.order_no}',
+            status='POSTED', source_doc_type='ProductionOrder.Uncomplete',
+            source_doc_id=order.id, created_by=user,
+        )
+        for line in je.lines.all():
+            JournalLine.objects.create(
+                entry=rev_je, account=line.account,
+                debit=line.credit, credit=line.debit,  # swap
+                description=f'عكس: {line.description}',
+            )
+        rev_je.recalc_totals()
 
     # 5) الحالة: رجوع لمرحلة الخطة + تصفير بيانات الإفراج/الإكمال.
     order.status = 'DRAFT'
@@ -1278,8 +1311,8 @@ def complete_production_order(order: ProductionOrder, user=None):
                                  debit=Decimal('0'), credit=total_cost,
                                  description=f'تصفية WIP — {order.order_no}')
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'completion JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('completion JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     order.status = 'COMPLETED'
     order.completed_at = timezone.now()
     order.completed_by = user

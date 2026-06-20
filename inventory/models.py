@@ -281,7 +281,11 @@ class StockMovement(models.Model):
             old_stock = v.current_stock
             old_cost = v.average_cost
             new_stock = old_stock + qty
-            if new_stock > 0:
+            if old_stock <= 0:
+                # مفيش رصيد سابق صحيح يتمزج بيه (صفر أو سالب) — المتوسط = تكلفة الوارد.
+                # ده بيمنع تلف متوسط التكلفة لو الرصيد كان وصل سالب بالغلط.
+                v.average_cost = Decimal(self.unit_cost)
+            elif new_stock > 0:
                 v.average_cost = ((old_stock * old_cost) + (qty * Decimal(self.unit_cost))) / new_stock
             v.current_stock = new_stock
         else:

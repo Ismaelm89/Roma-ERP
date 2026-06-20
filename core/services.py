@@ -55,8 +55,8 @@ def post_expense_voucher(voucher, user=None):
         description=f'صرف من {voucher.cash_account.name}',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'expense JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('expense JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     voucher.status = 'POSTED'
     voucher.journal_entry = je
     voucher.save(update_fields=['status', 'journal_entry'])
@@ -140,8 +140,8 @@ def post_fixed_asset(asset, user=None):
         supplier=credit_supplier,
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'fixed-asset JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('fixed-asset JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     asset.status = 'POSTED'
     asset.journal_entry = je
     asset.save(update_fields=['status', 'journal_entry'])

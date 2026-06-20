@@ -139,7 +139,8 @@ def post_customers_opening(rows, date=None):
         description='مقابل أرصدة العملاء الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'customers opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('customers opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -186,7 +187,8 @@ def post_suppliers_opening(rows, date=None):
         description='مقابل أرصدة الموردين الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'suppliers opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('suppliers opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -230,7 +232,8 @@ def post_cash_opening(rows, date=None):
         description='مقابل أرصدة النقدية الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'cash opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('cash opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -307,7 +310,8 @@ def post_assets_opening(rows, date=None):
         description='مقابل أرصدة الأصول الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'assets opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('assets opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -388,7 +392,8 @@ def post_inventory_opening(submitted, date=None):
         description='مقابل أرصدة المخزون الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'inventory opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('inventory opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -471,7 +476,8 @@ def post_accessories_opening(submitted, date=None):
         description='مقابل أرصدة الإكسسوارات الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'accessories opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('accessories opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -554,7 +560,8 @@ def post_fabric_opening(submitted, date=None):
         description='مقابل أرصدة الأقمشة الافتتاحية',
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'fabric opening JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('fabric opening JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 
@@ -618,7 +625,8 @@ def finalize_opening(registered_capital, date=None):
                                    description='جاري الشريك — عجز عن رأس المال المسجّل')
 
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'finalize JE unbalanced'
+    if je.total_debit != je.total_credit:
+        raise AssertionError('finalize JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     return je
 
 

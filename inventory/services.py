@@ -115,10 +115,12 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
     )
     grand_total = Decimal('0')
     for p in lines:
-        # المخزون بالقطعة: لو الشراء بوحدة جملة، نحوّل لقطع وتكلفة القطعة.
+        # المخزون بالقطعة: لو الشراء بوحدة جملة، نحوّل لقطع. تكلفة القطعة بتتحسب من
+        # إجمالي البند مرة واحدة (تقريب واحد) عشان قيمة الحركة تطابق القيد بالظبط.
         pieces = p.pieces_in
-        piece_cost = p.piece_cost
         line_total = _q(Decimal(p.quantity) * Decimal(p.unit_cost))
+        piece_cost = ((line_total / pieces).quantize(Decimal('0.0001'))
+                      if pieces > 0 else Decimal('0'))
         grand_total += line_total
         mv = StockMovement.objects.create(
             variant=p.variant, date=invoice.date, movement_type='PURCHASE_IN',
@@ -147,8 +149,8 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
         description=credit_desc, supplier=credit_supplier,
     )
     je.recalc_totals()
-    assert je.total_debit == je.total_credit, 'finished-goods invoice JE unbalanced'
-
+    if je.total_debit != je.total_credit:
+        raise AssertionError('finished-goods invoice JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
     invoice.is_posted = True
     invoice.journal_entry = je
     invoice.save(update_fields=['is_posted', 'journal_entry'])

@@ -886,9 +886,6 @@ class ProductionSize(models.Model):
     def __str__(self):
         return f'{self.order.order_no} / {self.size} × {self.quantity}'
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-
 
 class FabricUsage(models.Model):
     """استهلاك القماش لأمر إنتاج.
@@ -925,9 +922,6 @@ class FabricUsage(models.Model):
         label = self.batch.batch_no if self.batch_id else (
             self.fabric_type.name_ar if self.fabric_type_id else 'قماش')
         return f'{self.order.order_no}: {label} × {self.actual_qty_kg or self.planned_qty_kg} كجم'
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
 
 
 class Size(models.Model):

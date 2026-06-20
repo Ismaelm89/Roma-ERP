@@ -43,6 +43,10 @@ def post_sales_invoice(invoice, user=None):
             raise PostingError('سعر القطعة لا يمكن أن يكون سالباً.')
         if not line.variant_id:
             raise PostingError('لازم تختار المقاس في كل بند (البيع بالقطعة من مقاس محدد).')
+        if line.sale_unit == 'WHOLESALE' and line.unit_factor <= 0:
+            raise PostingError(
+                f'{line.variant}: حدد «وحدة الجملة» وعدد القطع فيها على المنتج الرئيسي '
+                'الأول عشان تبيع بالجملة (دلوقتي القيمة صفر فالبند هيتباع من غير ما يخصم مخزون).')
         line.recalc()
 
     # ----- Item 4a: امنع البيع لو الرصيد مش كفاية -----
@@ -68,9 +72,9 @@ def post_sales_invoice(invoice, user=None):
     total_cogs = Decimal('0')
     for line in lines:
         item = line.item
-        # ----- DOZEN sale: decrement (dozens × dozen_size) pieces of one size -----
+        # خصم القطع الفعلية للمقاس (العدد × عدد القطع في وحدة البيع).
         v = line.variant
-        pieces = line.total_pieces  # عدد الدستات × عدد القطع في الدستة
+        pieces = line.total_pieces
         line_cogs = _q(Decimal(v.average_cost) * Decimal(pieces))
         line.cogs_at_posting = line_cogs
         total_cogs += line_cogs
@@ -85,7 +89,7 @@ def post_sales_invoice(invoice, user=None):
             document_type='SalesInvoice',
             document_id=invoice.id,
             notes=f'فاتورة {invoice.invoice_no} — {item.code} مقاس {v.size} '
-                  f'({line.quantity} دستة = {pieces} قطعة)',
+                  f'({line.quantity} {line.sale_unit_label} = {pieces} قطعة)',
             created_by=user,
         )
         mv.apply_to_variant()
@@ -142,7 +146,8 @@ def cancel_sales_invoice(invoice, user=None):
     for line in invoice.lines.select_related('item', 'variant').all():
         if line.quantity <= 0 or not line.variant_id:
             continue
-        # Return (dozens × dozen_size) pieces of the size back to stock.
+        # رجّع القطع للمخزون بنفس تكلفة القطعة وقت الترحيل (= cogs_at_posting ÷ القطع)،
+        # عشان مزج المتوسط المرجّح يعيد بناء متوسط التكلفة الصح بالظبط.
         v = line.variant
         pieces = line.total_pieces
         per_piece_cost = (Decimal(line.cogs_at_posting) / Decimal(pieces)
@@ -156,7 +161,7 @@ def cancel_sales_invoice(invoice, user=None):
             document_type='SalesInvoice.Cancel',
             document_id=invoice.id,
             notes=f'إلغاء فاتورة {invoice.invoice_no} — {line.item.code} مقاس {v.size} '
-                  f'({line.quantity} دستة = {pieces} قطعة)',
+                  f'({line.quantity} {line.sale_unit_label} = {pieces} قطعة)',
             created_by=user,
         )
         mv.apply_to_variant()
@@ -205,6 +210,13 @@ def post_receipt(receipt, user=None):
         if a.invoice.customer_id != receipt.customer_id:
             raise PostingError(
                 f'الفاتورة {a.invoice.invoice_no} ليست لنفس العميل.'
+            )
+        # امنع تخصيص أكتر من المتبقّي على الفاتورة (يمنع رصيد مدفوع أكبر من الإجمالي).
+        due = Decimal(a.invoice.balance_due)
+        if Decimal(a.amount) > due:
+            raise PostingError(
+                f'الفاتورة {a.invoice.invoice_no}: المبلغ المخصّص ({a.amount}) أكبر من '
+                f'المتبقّي عليها ({due}).'
             )
 
     if receipt.cash_account_id:

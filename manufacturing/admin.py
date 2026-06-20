@@ -189,11 +189,6 @@ class FabricBatchAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin):
         return f'{fmt_money(obj.in_stock_qty_kg)} كجم'
     in_stock_qty_kg_col.short_description = 'بالمخزن'
 
-    def _UNUSED_at_dyer(self, obj):
-        if obj.at_dyer_qty_kg > 0:
-            return format_html('<b>{} كجم</b>', obj.in_stock_qty_kg)
-        return '—'
-
     def cost_per_kg_col(self, obj):
         return f'{fmt_money(obj.cost_per_kg)} جنيه/كجم'
     cost_per_kg_col.short_description = 'تكلفة الكيلو'

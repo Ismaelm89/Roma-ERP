@@ -65,8 +65,11 @@ class Command(BaseCommand):
             )
         col = {name: header.index(name) for name in header}
 
-        created_items = updated_items = created_variants = 0
+        created_items = updated_items = created_variants = skipped_sizes = 0
         errors = []
+        # كتالوج المقاسات المعتمد — أي مقاس بره الكتالوج بيتتخطّى (حماية من بيانات غلط).
+        from manufacturing.models import Size
+        valid_sizes = set(Size.objects.values_list('code', flat=True))
 
         with transaction.atomic():
             for row_idx, row in enumerate(rows[1:], start=2):
@@ -99,6 +102,14 @@ class Command(BaseCommand):
                 sizes = [s.strip().upper() for s in sizes_raw.split(',') if s.strip()] or DEFAULT_SIZES
 
                 for size in sizes:
+                    # تحقّق إن المقاس موجود في كتالوج المقاسات — يمنع إنشاء مقاس بالغلط
+                    # من قيمة غلط في عمود المقاسات (زي توكن من اسم المنتج).
+                    if valid_sizes and size not in valid_sizes:
+                        self.stdout.write(self.style.WARNING(
+                            f'  تخطّي مقاس غير معروف «{size}» للصنف {code} '
+                            f'(مش في كتالوج المقاسات).'))
+                        skipped_sizes += 1
+                        continue
                     _, was_created = ItemVariant.objects.get_or_create(
                         item=item, size=size,
                     )
