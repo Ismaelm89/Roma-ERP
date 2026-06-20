@@ -155,3 +155,78 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
     invoice.journal_entry = je
     invoice.save(update_fields=['is_posted', 'journal_entry'])
     return je
+
+
+# ------------------------------------------------------------------ Stock-take
+class StockTakePostingError(Exception):
+    """Business-rule failure surfaced to the user when posting a stock-take."""
+
+
+@transaction.atomic
+def post_stock_take(stock_take, user=None):
+    """رحّل جرد مخزون: لكل بند، ظبط رصيد الصنف على الكمية المعدودة بحركة ADJUST،
+    ورحّل الفرق على «فروق جرد» في قيد واحد متوازن:
+        زيادة (معدود > نظام): DR المخزون / CR فروق جرد
+        عجز  (معدود < نظام): DR فروق جرد / CR المخزون
+    """
+    if stock_take.is_posted:
+        raise StockTakePostingError(f'الجرد {stock_take.take_no} مرحّل من قبل.')
+    lines = list(stock_take.lines.select_related('variant').all())
+    if not lines:
+        raise StockTakePostingError('أضف بند واحد على الأقل قبل الترحيل.')
+    for l in lines:
+        if Decimal(l.counted_qty or 0) < 0:
+            raise StockTakePostingError(f'{l.variant}: الكمية المعدودة لا يمكن أن تكون سالبة.')
+
+    inv_acct = get_system_account('INVENTORY')
+    var_acct = get_system_account('INVENTORY_VARIANCE')
+    je = JournalEntry.objects.create(
+        date=stock_take.date, reference=stock_take.take_no,
+        description=f'جرد مخزون {stock_take.take_no}',
+        status='POSTED', source_doc_type='StockTake', source_doc_id=stock_take.id,
+        created_by=user,
+    )
+    any_gl = False
+    for l in lines:
+        v = l.variant
+        sys_qty = Decimal(v.current_stock or 0)
+        counted = Decimal(l.counted_qty or 0)
+        var = counted - sys_qty
+        cost = Decimal(v.average_cost or 0)
+        l.system_qty_at_post = sys_qty
+        if var != 0:
+            mv = StockMovement.objects.create(
+                variant=v, date=stock_take.date,
+                movement_type='ADJUST_IN' if var > 0 else 'ADJUST_OUT',
+                quantity=abs(var), unit_cost=cost,
+                document_type='StockTake', document_id=stock_take.id,
+                notes=f'جرد {stock_take.take_no} — نظام {sys_qty}، معدود {counted}',
+                created_by=user,
+            )
+            mv.apply_to_variant()
+            value = _q(abs(var) * cost)
+            if value > 0:
+                any_gl = True
+                if var > 0:   # زيادة: DR مخزون / CR فروق جرد
+                    JournalLine.objects.create(entry=je, account=inv_acct, variant=v,
+                        debit=value, credit=Decimal('0'), description=f'زيادة جرد — {v.sku_code}')
+                    JournalLine.objects.create(entry=je, account=var_acct,
+                        debit=Decimal('0'), credit=value, description=f'زيادة جرد — {v.sku_code}')
+                else:          # عجز: DR فروق جرد / CR مخزون
+                    JournalLine.objects.create(entry=je, account=var_acct,
+                        debit=value, credit=Decimal('0'), description=f'عجز جرد — {v.sku_code}')
+                    JournalLine.objects.create(entry=je, account=inv_acct, variant=v,
+                        debit=Decimal('0'), credit=value, description=f'عجز جرد — {v.sku_code}')
+        l.is_posted = True
+        l.save(update_fields=['system_qty_at_post', 'is_posted'])
+
+    je.recalc_totals()
+    if je.total_debit != je.total_credit:
+        raise AssertionError('stock-take JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
+    if not any_gl:          # مفيش فروق بقيمة — امسح القيد الفاضي
+        je.delete()
+        je = None
+    stock_take.is_posted = True
+    stock_take.journal_entry = je
+    stock_take.save(update_fields=['is_posted', 'journal_entry'])
+    return je

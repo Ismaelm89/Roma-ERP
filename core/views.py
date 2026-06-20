@@ -65,6 +65,7 @@ ADMIN_MODULES = [
             ('المنتجات الفرعية', 'inventory', 'item'),
             ('الـ SKUs (المقاسات)', 'inventory', 'itemvariant'),
             ('حركات المخزون', 'inventory', 'stockmovement'),
+            ('جرد المخزون', 'inventory', 'stocktake'),
         ],
     },
     {

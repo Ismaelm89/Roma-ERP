@@ -9,9 +9,11 @@ from core.templatetags.money_filters import fmt_money
 from manufacturing.models import ProductSizeRecipe
 
 from .models import (Item, ItemVariant, Product, StockMovement,
-                     FinishedGoodsPurchaseInvoice, FinishedGoodsPurchaseLine)
+                     FinishedGoodsPurchaseInvoice, FinishedGoodsPurchaseLine,
+                     StockTake, StockTakeLine)
 from .services import (post_finished_goods_purchase_invoice,
-                       FinishedGoodsPostingError)
+                       FinishedGoodsPostingError,
+                       post_stock_take, StockTakePostingError)
 
 
 class ItemVariantForm(forms.ModelForm):
@@ -374,3 +376,89 @@ class FinishedGoodsPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, adm
                 self.message_user(request, f'{inv.invoice_no}: {e}', level=messages.ERROR)
         if ok:
             self.message_user(request, f'تم ترحيل {ok} فاتورة.', level=messages.SUCCESS)
+
+
+# ------------------------------------------------------------------ Stock-take
+class StockTakeLineInline(admin.TabularInline):
+    model = StockTakeLine
+    extra = 1
+    autocomplete_fields = ('variant',)
+    fields = ('variant', 'counted_qty', 'system_qty_col', 'variance_col', 'variance_value_col')
+    readonly_fields = ('system_qty_col', 'variance_col', 'variance_value_col')
+
+    def system_qty_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.system_qty)}'
+    system_qty_col.short_description = 'رصيد النظام'
+
+    def variance_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        v = obj.variance
+        color = '#15803d' if v > 0 else ('#b91c1c' if v < 0 else '#666')
+        sign = '+' if v > 0 else ''
+        return format_html('<b style="color:{}">{}{}</b>', color, sign, fmt_money(v))
+    variance_col.short_description = 'الفرق (معدود − نظام)'
+
+    def variance_value_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return f'{fmt_money(obj.variance_value)} ج'
+    variance_value_col.short_description = 'قيمة الفرق'
+
+
+@admin.register(StockTake)
+class StockTakeAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin):
+    lock_field = 'is_posted'
+    unlock_always = ('notes',)
+    list_display = ('take_no', 'date', 'lines_count', 'variance_total_col', 'is_posted')
+    list_filter = ('is_posted', 'date')
+    search_fields = ('take_no', 'notes')
+    date_hierarchy = 'date'
+    readonly_fields = ('take_no', 'is_posted', 'journal_entry', 'variance_total_display', 'created_at')
+    fieldsets = (
+        ('بيانات الجرد', {
+            'fields': ('take_no', 'date', 'notes'),
+            'description': 'اختار الأصناف واكتب «الكمية الفعلية المعدودة» لكل صنف. النظام '
+                           'بيحسب الفرق. بعد ما تحفظ، اختار الجرد من القايمة ودوس أكشن «ترحيل '
+                           'الجرد» — هيظبط الرصيد على المعدود ويرحّل العجز/الزيادة على «فروق جرد».',
+        }),
+        ('النتيجة', {'fields': ('variance_total_display', 'is_posted', 'journal_entry', 'created_at')}),
+    )
+    inlines = [StockTakeLineInline]
+    actions = ('action_post',)
+
+    def lines_count(self, obj):
+        return obj.lines.count()
+    lines_count.short_description = 'بنود'
+
+    def variance_total_col(self, obj):
+        return f'{fmt_money(obj.total_variance_value)} ج'
+    variance_total_col.short_description = 'صافي الفرق'
+
+    def variance_total_display(self, obj):
+        if not obj.pk:
+            return '—'
+        v = obj.total_variance_value
+        color = '#15803d' if v >= 0 else '#b91c1c'
+        return format_html('<b style="color:{};font-size:14px;">{} ج</b>', color, fmt_money(v))
+    variance_total_display.short_description = 'صافي قيمة الفرق (زيادة − عجز)'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description='ترحيل الجرد المختار (تسوية المخزون + قيد فروق جرد)')
+    def action_post(self, request, queryset):
+        ok = 0
+        for st in queryset:
+            try:
+                post_stock_take(st, user=request.user)
+                ok += 1
+            except StockTakePostingError as e:
+                self.message_user(request, f'{st.take_no}: {e}', level=messages.ERROR)
+        if ok:
+            self.message_user(request, f'تم ترحيل {ok} جرد وتعديل المخزون.',
+                              level=messages.SUCCESS)

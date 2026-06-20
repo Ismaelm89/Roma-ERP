@@ -51,8 +51,7 @@ COA = [
 
     ('5000000', 'المصروفات',             'Expenses',            'EXPENSE',   None,       True),
     ('5110000', 'تكلفة البضاعة المباعة', 'Cost of Goods Sold',  'EXPENSE',   '5000000',  False),
-    ('5210000', 'خسارة جرد',             'Inventory Loss',      'EXPENSE',   '5000000',  False),
-    ('5220000', 'ربح جرد',                'Inventory Gain',      'EXPENSE',   '5000000',  False),
+    ('5210000', 'فروق جرد',              'Inventory Variance',  'EXPENSE',   '5000000',  False),
 
     # مصروفات تشغيلية وإدارية (سندات الصرف)
     ('5300000', 'مصروفات تشغيلية وإدارية', 'Operating Expenses', 'EXPENSE',  '5000000',  True),

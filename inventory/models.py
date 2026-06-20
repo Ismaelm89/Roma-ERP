@@ -403,3 +403,75 @@ class FinishedGoodsPurchaseLine(models.Model):
     def total_cost(self):
         return (Decimal(self.quantity or 0)
                 * Decimal(self.unit_cost or 0)).quantize(Decimal('0.01'))
+
+
+# ------------------------------------------------------------------ Stock-take
+class StockTake(models.Model):
+    """جرد مخزون — تعدّ الكميات الفعلية وتقارنها برصيد النظام، والترحيل بيرحّل العجز/الزيادة
+    على حساب «فروق جرد» (5210000):
+        زيادة: DR المخزون / CR فروق جرد
+        عجز:   DR فروق جرد / CR المخزون
+    كل بند بيظبط رصيد الصنف على الكمية المعدودة بحركة ADJUST_IN/ADJUST_OUT.
+    """
+    take_no = models.CharField('رقم الجرد', max_length=30, unique=True, blank=True,
+                               help_text='سيب الخانة فاضية وهيتولّد تلقائياً (ST-0001 ...)')
+    date = models.DateField('تاريخ الجرد')
+    notes = models.TextField('ملاحظات', blank=True)
+    is_posted = models.BooleanField('مرحّل محاسبياً', default=False, editable=False)
+    journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+', editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'جرد مخزون'
+        verbose_name_plural = 'جرد المخزون'
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return self.take_no or f'ST-{self.pk}'
+
+    def save(self, *args, **kwargs):
+        from core.serials import assign_if_blank
+        assign_if_blank(self, 'take_no', 'ST-', 4)
+        super().save(*args, **kwargs)
+
+    @property
+    def total_variance_value(self):
+        return sum((l.variance_value for l in self.lines.all()), Decimal('0'))
+
+
+class StockTakeLine(models.Model):
+    """بند جرد — صنف واحد بالكمية الفعلية المعدودة."""
+    stock_take = models.ForeignKey(StockTake, on_delete=models.CASCADE,
+                                   related_name='lines', verbose_name='الجرد')
+    variant = models.ForeignKey(ItemVariant, on_delete=models.PROTECT,
+                                related_name='stock_take_lines', verbose_name='المنتج (SKU)')
+    counted_qty = models.DecimalField('الكمية الفعلية المعدودة', max_digits=12, decimal_places=2)
+    system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل', max_digits=12,
+                                             decimal_places=2, null=True, blank=True, editable=False)
+    is_posted = models.BooleanField('مرحّل', default=False, editable=False)
+
+    class Meta:
+        verbose_name = 'بند جرد'
+        verbose_name_plural = 'بنود الجرد'
+
+    def __str__(self):
+        return f'{self.variant} — عدّ {self.counted_qty}'
+
+    @property
+    def system_qty(self):
+        """رصيد النظام: المخزّن وقت الترحيل لو مرحّل، وإلا الرصيد الحالي."""
+        if self.is_posted and self.system_qty_at_post is not None:
+            return Decimal(self.system_qty_at_post)
+        return Decimal(self.variant.current_stock or 0) if self.variant_id else Decimal('0')
+
+    @property
+    def variance(self):
+        return (Decimal(self.counted_qty or 0) - self.system_qty).quantize(Decimal('0.01'))
+
+    @property
+    def variance_value(self):
+        cost = Decimal(self.variant.average_cost or 0) if self.variant_id else Decimal('0')
+        return (self.variance * cost).quantize(Decimal('0.01'))

@@ -22,6 +22,7 @@ SIDEBAR = [
         ('inventory', 'Item'),
         ('inventory', 'ItemVariant'),
         ('inventory', 'StockMovement'),
+        ('inventory', 'StockTake'),
     ]),
     ('SALES', [
         ('sales', 'Customer'),

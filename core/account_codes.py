@@ -26,8 +26,7 @@ SYSTEM_ACCOUNTS = {
     'SALES_REVENUE':   '4110000',
     'SALES_RETURNS':   '4120000',
     'COGS':            '5110000',
-    'INVENTORY_LOSS':  '5210000',
-    'INVENTORY_GAIN':  '5220000',
+    'INVENTORY_VARIANCE': '5210000',  # فروق جرد (عجز + زيادة في حساب واحد)
     'MFG_WAGES_EXPENSE': '5370000',  # فرق مصنعيات (over-spend above accrued wages)
 }
 
