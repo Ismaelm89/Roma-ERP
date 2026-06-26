@@ -565,6 +565,57 @@ def post_wage_adjustment(adj, user=None):
 # ============================================================
 
 
+def _draw_fabric_part(order, ft, color, need, factor, user, note):
+    """يخصم كمية قماش (need، بالهالك) من دفعات (نوع+لون) بالـFIFO، بيسجّل FabricUsage
+    (+ fabric_color + note) و FabricMovement لكل دفعة، ويرجّع قيمة القماش المخصومة.
+    بيرمي FabricPostingError لو المتاح أقل من المطلوب أو معرفش يخصم الكل.
+    بيستخدمه الإنتاج مرتين للأطقم: مرة للفانلة (لونها) ومرة للشورت (لونه)."""
+    color_txt = f' (لون {color.name_ar})' if color else ''
+    available = fabric_available_kg(ft, color)
+    if available < need:
+        raise FabricPostingError(
+            f'القماش/الخامة «{ft.name_ar}»{color_txt}: المتاح بالمخزن ({available} كجم) أقل من '
+            f'المطلوب للإنتاج بالهالك ({need} كجم). اشترِ قماش الأول من "مشتريات القماش".'
+        )
+    avg_cost = fabric_avg_cost(ft, color)
+    batch_qs = (FabricBatch.objects.select_for_update()
+                .filter(fabric_type_id=ft.pk, in_stock_qty_kg__gt=0))
+    if color is not None:
+        batch_qs = batch_qs.filter(color_id=color.pk)
+    batches = list(batch_qs.order_by('purchase_date', 'id'))
+    remaining = need
+    value = Decimal('0')
+    for b in batches:
+        if remaining <= 0:
+            break
+        avail = Decimal(b.in_stock_qty_kg or 0)
+        draw = (avail if avail < remaining else remaining).quantize(Decimal('0.001'))
+        if draw <= 0:
+            continue
+        before_share = (draw / factor).quantize(Decimal('0.001')) if factor > 0 else draw
+        FabricUsage.objects.create(
+            order=order, fabric_type=ft, batch=b, fabric_color=color,
+            planned_qty_kg=before_share, actual_qty_kg=draw,
+            cost_per_kg_snapshot=avg_cost, notes=note,
+        )
+        FabricMovement.objects.create(
+            batch=b, date=order.date, movement_type='ISSUE_TO_PRODUCTION',
+            quantity_kg=draw, cost_per_kg_snapshot=avg_cost,
+            document_type='ProductionOrder', document_id=order.id,
+            notes=f'صرف لأمر {order.order_no} — {order.title}',
+            created_by=user,
+        )
+        b.in_stock_qty_kg = avail - draw
+        b.save(update_fields=['in_stock_qty_kg'])
+        value += draw * avg_cost
+        remaining -= draw
+    if remaining > Decimal('0.001'):
+        raise FabricPostingError(
+            f'القماش/الخامة «{ft.name_ar}»{color_txt}: مقدرش يخصم كل المطلوب ({need} كجم) — '
+            f'فاضل {remaining} كجم. راجع رصيد دفعات القماش.'
+        )
+    return value
+
 
 @transaction.atomic
 def produce_production_order(order: ProductionOrder, user=None):
@@ -641,68 +692,31 @@ def produce_production_order(order: ProductionOrder, user=None):
             'عرّف وصفة المقاسات (كمية القماش للمقاس) على المنتج الأول.'
         )
 
-    need = order.recipe_actual_fabric_kg  # الكمية المستخدمة بالهالك — اللي بتتخصم فعلياً
-    if need <= 0:
+    top_need = order.recipe_actual_fabric_kg  # قماش الفانلة بالهالك
+    shorts_need = order.recipe_actual_shorts_fabric_kg  # قماش الشورت بالهالك (للأطقم)
+    if top_need <= 0 and shorts_need <= 0:
         raise FabricPostingError('كمية القماش المحسوبة من الوصفة = صفر — راجع وصفة المقاسات.')
 
     ft = p.fabric_type
-    # لون القماش بييجي من المنتج الفرعي — الخصم بيكون من دفعات نفس اللون بس
-    # (لو المنتج الفرعي مالوش لون، بنخصم من كل الألوان — توافق مع بيانات قديمة).
-    color = order.fabric_color
-    color_txt = f' (لون {color.name_ar})' if color else ''
-    available = fabric_available_kg(ft, color)
-    if available < need:
-        raise FabricPostingError(
-            f'القماش/الخامة «{ft.name_ar}»{color_txt}: المتاح بالمخزن ({available} كجم) أقل من '
-            f'المطلوب للإنتاج بالهالك ({need} كجم). اشترِ قماش الأول من "مشتريات القماش".'
-        )
-
-    # المتوسط المرجّح لسعر الكيلو عبر دفعات نفس النوع/اللون = تكلفة الـ average
-    # للإنتاج (مش تكلفة دفعة بعينها). ده اللي بيتسجّل كـ snapshot ويحسب قيمة القماش.
-    avg_cost = fabric_avg_cost(ft, color)
     factor = Decimal('1') + (Decimal(p.waste_pct or 0) / Decimal('100'))
 
     # امسح أي بنود استهلاك قديمة (هتتولّد من جديد) — الأمر لسه DRAFT.
     order.fabric_usages.all().delete()
 
-    # اخصم المطلوب من الدفعات المتاحة من نفس النوع/اللون — الأقدم أولاً (FIFO فعلي).
-    batch_qs = (FabricBatch.objects.select_for_update()
-                .filter(fabric_type_id=ft.pk, in_stock_qty_kg__gt=0))
-    if color is not None:
-        batch_qs = batch_qs.filter(color_id=color.pk)
-    batches = list(batch_qs.order_by('purchase_date', 'id'))
-    remaining = need
+    # خصم القماش — للأطقم خصمين: الفانلة من لونها + الشورت من لونه (نفس النوع، لون مختلف).
+    # لون القماش بييجي من المنتج الفرعي. لو مالوش لون، الخصم من كل الألوان (توافق قديم).
     total_fabric_value = Decimal('0')
-    for b in batches:
-        if remaining <= 0:
-            break
-        avail = Decimal(b.in_stock_qty_kg or 0)
-        draw = (avail if avail < remaining else remaining).quantize(Decimal('0.001'))
-        if draw <= 0:
-            continue
-        before_share = (draw / factor).quantize(Decimal('0.001')) if factor > 0 else draw
-        FabricUsage.objects.create(
-            order=order, fabric_type=ft, batch=b,
-            planned_qty_kg=before_share, actual_qty_kg=draw,
-            cost_per_kg_snapshot=avg_cost, notes='تلقائي من خامة المنتج',
-        )
-        FabricMovement.objects.create(
-            batch=b, date=order.date, movement_type='ISSUE_TO_PRODUCTION',
-            quantity_kg=draw, cost_per_kg_snapshot=avg_cost,
-            document_type='ProductionOrder', document_id=order.id,
-            notes=f'صرف لأمر {order.order_no} — {order.title}',
-            created_by=user,
-        )
-        b.in_stock_qty_kg = avail - draw
-        b.save(update_fields=['in_stock_qty_kg'])
-        total_fabric_value += draw * avg_cost
-        remaining -= draw
-
-    if remaining > Decimal('0.001'):
-        raise FabricPostingError(
-            f'القماش/الخامة «{ft.name_ar}»: مقدرش يخصم كل المطلوب ({need} كجم) — '
-            f'فاضل {remaining} كجم. راجع رصيد دفعات القماش.'
-        )
+    if top_need > 0:
+        total_fabric_value += _draw_fabric_part(
+            order, ft, order.fabric_color, top_need, factor, user, 'تلقائي من خامة المنتج')
+    if shorts_need > 0:
+        shorts_color = order.shorts_fabric_color
+        if shorts_color is None:
+            raise FabricPostingError(
+                'المنتج الفرعي عليه قماش شورت في الوصفة بس مالوش «لون قماش الشورت» — '
+                'حدّد لون الشورت على المنتج الفرعي الأول.')
+        total_fabric_value += _draw_fabric_part(
+            order, ft, shorts_color, shorts_need, factor, user, 'قماش الشورت')
 
     total_fabric_value = total_fabric_value.quantize(Decimal('0.01'))
 
@@ -849,17 +863,28 @@ def refresh_planned_fabric_usage(order: ProductionOrder):
     p = order.main_product
     if not p or not p.fabric_type_id or not order.has_recipe:
         return
+    ft = p.fabric_type
+    # صف الفانلة (الجزء الأساسي)
     before = order.recipe_planned_fabric_kg
     after = order.recipe_actual_fabric_kg
-    if before <= 0 and after <= 0:
-        return
-    ft = p.fabric_type
-    FabricUsage.objects.create(
-        order=order, fabric_type=ft, batch=None,
-        planned_qty_kg=before, actual_qty_kg=after,
-        cost_per_kg_snapshot=fabric_avg_cost(ft, order.fabric_color),
-        notes='مخطط من وصفة المنتج (قبل الإنتاج)',
-    )
+    if before > 0 or after > 0:
+        FabricUsage.objects.create(
+            order=order, fabric_type=ft, batch=None, fabric_color=order.fabric_color,
+            planned_qty_kg=before, actual_qty_kg=after,
+            cost_per_kg_snapshot=fabric_avg_cost(ft, order.fabric_color),
+            notes='مخطط من وصفة المنتج (قبل الإنتاج)',
+        )
+    # صف الشورت (للأطقم بلونين) — لون مختلف
+    s_before = order.recipe_planned_shorts_fabric_kg
+    s_after = order.recipe_actual_shorts_fabric_kg
+    if s_before > 0 or s_after > 0:
+        sc = order.shorts_fabric_color
+        FabricUsage.objects.create(
+            order=order, fabric_type=ft, batch=None, fabric_color=sc,
+            planned_qty_kg=s_before, actual_qty_kg=s_after,
+            cost_per_kg_snapshot=fabric_avg_cost(ft, sc),
+            notes='قماش الشورت — مخطط من الوصفة (قبل الإنتاج)',
+        )
 
 
 # ============================================================

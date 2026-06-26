@@ -88,7 +88,7 @@ class ProductSizeRecipeInline(admin.TabularInline):
     الإكسسوارات بتتدار من صفحة الوصفة نفسها (رابط 'إكسسوارات المقاس')."""
     model = ProductSizeRecipe
     extra = 1
-    fields = ('size', 'fabric_qty_kg', 'labor_cost', 'selling_price',
+    fields = ('size', 'fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost', 'selling_price',
               'reorder_level', 'accessories_link', 'notes')
     readonly_fields = ('accessories_link',)
     autocomplete_fields = ('size',)
@@ -169,7 +169,7 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
     fieldsets = (
         ('بيانات المنتج الفرعي', {
             'fields': ('product', 'sub_type_note', 'inherited_summary', 'code', 'name_ar',
-                       'fabric_color', 'active'),
+                       'fabric_color', 'shorts_fabric_color', 'active'),
             'description': 'المنتج الفرعي = اسم بيعي + صورة + لون القماش. اختار «المنتج الرئيسي» '
                            'وهو هيجيب المقاسات والأسعار والوصفة (قماش/إكسسوارات/مصنعية) '
                            'تلقائياً — المقاسات بتظهر تحت كـ SKUs للعرض فقط. '

@@ -116,7 +116,13 @@ class Item(models.Model):
                                      verbose_name='لون القماش المستخدم',
                                      help_text='اللون اللي بيتخصم من مخزون القماش وقت الإنتاج. '
                                                'المخزون متخزّن باللون، فلازم تختار اللون عشان '
-                                               'الخصم يبقى من نفس اللون الصح.')
+                                               'الخصم يبقى من نفس اللون الصح. (للأطقم = لون الفانلة.)')
+    shorts_fabric_color = models.ForeignKey('manufacturing.FabricColor', null=True, blank=True,
+                                            on_delete=models.PROTECT, related_name='items_shorts',
+                                            verbose_name='لون قماش الشورت',
+                                            help_text='للأطقم بس: لون قماش الشورت اللي هيتخصم منه '
+                                                      'قماش الشورت وقت الإنتاج. سيبه فاضي لو المنتج '
+                                                      'مش طقم بلونين.')
     description = models.TextField('الوصف', blank=True)
     dozen_size = models.PositiveSmallIntegerField('عدد القطع في الدستة', default=12,
                                                      help_text='الدستة = الوحدة الافتراضية للبيع. '

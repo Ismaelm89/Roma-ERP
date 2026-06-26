@@ -1345,16 +1345,16 @@ class ProductSizeAccessoryInline(admin.TabularInline):
 
 @admin.register(ProductSizeRecipe)
 class ProductSizeRecipeAdmin(StayOnPageMixin, admin.ModelAdmin):
-    list_display = ('product', 'size', 'fabric_qty_kg', 'labor_cost',
+    list_display = ('product', 'size', 'fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost',
                     'selling_price', 'reorder_level', 'accessories_count')
     # تعديل سعر البيع (والتكلفة/حد الطلب) مباشرة من القائمة عشان تقدر تدخل أسعار
     # كل الوصفات بسرعة — السعر ده هو اللي بيظهر في فاتورة البيع.
-    list_editable = ('fabric_qty_kg', 'labor_cost', 'selling_price', 'reorder_level')
+    list_editable = ('fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost', 'selling_price', 'reorder_level')
     list_filter = ('product', 'size')
     search_fields = ('product__code', 'product__name_ar', 'size__code')
     autocomplete_fields = ('product', 'size')
     inlines = [ProductSizeAccessoryInline]
-    fields = ('product', 'size', 'fabric_qty_kg', 'labor_cost',
+    fields = ('product', 'size', 'fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost',
               'selling_price', 'reorder_level', 'notes')
 
     def accessories_count(self, obj):

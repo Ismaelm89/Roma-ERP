@@ -529,7 +529,8 @@ class ProductionOrder(models.Model):
         if self.fabric_usages.exists():
             agg = self.fabric_usages.aggregate(s=Sum('planned_qty_kg'))['s'] or Decimal('0')
             return Decimal(agg).quantize(Decimal('0.001'))
-        return self.recipe_planned_fabric_kg
+        return (self.recipe_planned_fabric_kg
+                + self.recipe_planned_shorts_fabric_kg).quantize(Decimal('0.001'))
 
     @property
     def total_actual_fabric_kg(self):
@@ -539,7 +540,8 @@ class ProductionOrder(models.Model):
         if self.fabric_usages.exists():
             agg = self.fabric_usages.aggregate(s=Sum('actual_qty_kg'))['s'] or Decimal('0')
             return Decimal(agg).quantize(Decimal('0.001'))
-        return self.recipe_actual_fabric_kg
+        return (self.recipe_actual_fabric_kg
+                + self.recipe_actual_shorts_fabric_kg).quantize(Decimal('0.001'))
 
     @property
     def total_fabric_value(self):
@@ -645,6 +647,25 @@ class ProductionOrder(models.Model):
         return (self.recipe_planned_fabric_kg * factor).quantize(Decimal('0.001'))
 
     @property
+    def recipe_planned_shorts_fabric_kg(self):
+        """قماش الشورت المخطط (قبل الهالك) = Σ (قماش الشورت للمقاس × عدد قطعه). للأطقم بس."""
+        recipes = self._recipe_by_size()
+        total = Decimal('0')
+        for sid, qty in self._pieces_by_size().items():
+            r = recipes.get(sid)
+            if r:
+                total += Decimal(getattr(r, 'shorts_fabric_qty_kg', 0) or 0) * Decimal(qty)
+        return total.quantize(Decimal('0.001'))
+
+    @property
+    def recipe_actual_shorts_fabric_kg(self):
+        """قماش الشورت بالهالك = المخطط × (1 + نسبة هالك المنتج)."""
+        p = self.main_product
+        waste = Decimal(p.waste_pct or 0) if p else Decimal('0')
+        factor = Decimal('1') + waste / Decimal('100')
+        return (self.recipe_planned_shorts_fabric_kg * factor).quantize(Decimal('0.001'))
+
+    @property
     def recipe_labor_cost(self):
         """إجمالي المصنعية من الوصفة = Σ (مصنعية المقاس × عدد القطع).
         بتترسمل في تكلفة المنتج التام عند الإنتاج (Phase C)."""
@@ -696,6 +717,13 @@ class ProductionOrder(models.Model):
         مالوش لون محدّد بنرجّع None والخصم بيتم من كل الألوان (توافق مع بيانات قديمة)."""
         if self.item_id and getattr(self.item, 'fabric_color_id', None):
             return self.item.fabric_color
+        return None
+
+    @property
+    def shorts_fabric_color(self):
+        """لون قماش الشورت — من المنتج الفرعي. None لو المنتج مش طقم بلونين."""
+        if self.item_id and getattr(self.item, 'shorts_fabric_color_id', None):
+            return self.item.shorts_fabric_color
         return None
 
     @staticmethod
@@ -904,6 +932,11 @@ class FabricUsage(models.Model):
     batch = models.ForeignKey(FabricBatch, null=True, blank=True, on_delete=models.PROTECT,
                                related_name='production_usages',
                                verbose_name='دفعة القماش (اتخصم منها)')
+    fabric_color = models.ForeignKey(FabricColor, null=True, blank=True, on_delete=models.PROTECT,
+                                     related_name='production_usages',
+                                     verbose_name='لون القماش',
+                                     help_text='لون القماش اللي اتخصم منه — بيتسجّل على الصف المخطط '
+                                               'والفعلي عشان نفرّق الفانلة عن الشورت.')
     planned_qty_kg = models.DecimalField('الكمية قبل الهالك (كيلو)', max_digits=12, decimal_places=3,
                                           help_text='الكمية من الوصفة قبل إضافة الهالك')
     actual_qty_kg = models.DecimalField('الكمية المستخدمة بالهالك (كيلو)', max_digits=12,
@@ -1319,7 +1352,12 @@ class ProductSizeRecipe(models.Model):
     fabric_qty_kg = models.DecimalField('كمية القماش للقطعة (كيلو)', max_digits=10,
                                         decimal_places=4, default=Decimal('0'),
                                         help_text='كمية القماش اللي القطعة الواحدة من المقاس ده '
-                                                  'بتستهلكها — قبل إضافة الهالك.')
+                                                  'بتستهلكها — قبل إضافة الهالك. (للأطقم = قماش الفانلة.)')
+    shorts_fabric_qty_kg = models.DecimalField('قماش الشورت للقطعة (كيلو)', max_digits=10,
+                                               decimal_places=4, default=Decimal('0'),
+                                               help_text='للأطقم بس: كمية قماش الشورت للقطعة الواحدة '
+                                                         '(قبل الهالك). بتتخصم من لون الشورت بتاع المنتج '
+                                                         'الفرعي. سيبها 0 لو المنتج مش طقم بلونين.')
     labor_cost = models.DecimalField('تكلفة المصنعية للقطعة', max_digits=12, decimal_places=4,
                                      default=Decimal('0'),
                                      help_text='أجور التشغيل/المصنعية للقطعة الواحدة من المقاس ده. '
