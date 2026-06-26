@@ -668,7 +668,7 @@ class FabricUsageInline(admin.TabularInline):
     model = FabricUsage
     extra = 0
     can_delete = False
-    fields = ('fabric_type', 'batch', 'planned_qty_kg', 'actual_qty_kg',
+    fields = ('fabric_type', 'fabric_color', 'batch', 'planned_qty_kg', 'actual_qty_kg',
               'cost_per_kg_snapshot', 'notes')
     readonly_fields = fields
 
