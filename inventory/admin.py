@@ -158,6 +158,9 @@ class ProductAdmin(StayOnPageMixin, admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
+    class Media:
+        js = ('inventory/image_live_preview.js',)
+
     list_display = ('image_thumb', 'code', 'product', 'name_ar', 'variants_count',
                     'dozen_size', 'active')
     list_display_links = ('code', 'name_ar')
