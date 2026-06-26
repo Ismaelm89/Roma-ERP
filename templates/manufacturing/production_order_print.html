@@ -23,6 +23,7 @@ body {
 .head { display:flex; justify-content:space-between; align-items:flex-end;
         border-bottom:2px solid var(--brand); padding-bottom:8px; margin-bottom:10px; }
 .head .company { font-size:20px; font-weight:700; color:var(--brand); }
+.head .logo { max-height:48px; max-width:140px; object-fit:contain; }
 .head .doc { font-size:15px; font-weight:700; }
 h2 { font-size:13px; color:var(--brand); margin:14px 0 4px; }
 table { width:100%; border-collapse:collapse; }
@@ -101,6 +102,7 @@ table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
     .sheet { border:none; padding:0; }
     .head { padding-bottom:4px; margin-bottom:5px; }
     .head .company { font-size:15px; }
+    .head .logo { max-height:34px; max-width:110px; }
     .head .doc { font-size:12px; }
     h2 { margin:5px 0 2px; font-size:10.5px; }
     .kpis { margin:4px 0 2px; gap:8px; }
@@ -143,7 +145,10 @@ table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
 <div class="sheet">
 
     <div class="head">
-        <div class="company">{{ company.name_ar|default:"روما للملابس" }}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            {% if company.logo %}<img src="{{ company.logo.url }}" class="logo" alt="logo">{% endif %}
+            <div class="company">{{ company.name_ar|default:"روما للملابس" }}</div>
+        </div>
         <div class="doc">ورقة أمر إنتاج {% if plan_stage %}— خطة{% endif %}</div>
     </div>
 
