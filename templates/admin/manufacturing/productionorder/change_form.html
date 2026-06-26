@@ -27,17 +27,24 @@
             </div>
         </div>
         <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:10px 14px;border-radius:6px;">
-            <div style="color:#64748b;font-size:12px;">لون القماش (اللي بيتخصم من المخزن)</div>
+            <div style="color:#64748b;font-size:12px;">{% if original.shorts_fabric_color %}لون الفانلة (اللي بيتخصم من المخزن){% else %}لون القماش (اللي بيتخصم من المخزن){% endif %}</div>
             <div style="font-size:20px;font-weight:700;color:#334155;">
                 {% if original.fabric_color %}{{ original.fabric_color.name_ar }}{% else %}<span style="color:#dc2626;">غير محدّد (هيتخصم من كل الألوان)</span>{% endif %}
             </div>
         </div>
+        {% if original.shorts_fabric_color %}
+        <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:10px 14px;border-radius:6px;">
+            <div style="color:#64748b;font-size:12px;">لون الشورت (اللي بيتخصم من المخزن)</div>
+            <div style="font-size:20px;font-weight:700;color:#334155;">{{ original.shorts_fabric_color.name_ar }}</div>
+            <div style="color:#64748b;font-size:11px;">{{ original.recipe_actual_shorts_fabric_kg|money }} كجم بالهالك</div>
+        </div>
+        {% endif %}
         <div style="background:#eef2ff;border:1px solid #c7d2fe;padding:10px 14px;border-radius:6px;">
-            <div style="color:#64748b;font-size:12px;">قماش قبل الهالك (من الوصفة)</div>
+            <div style="color:#64748b;font-size:12px;">{% if original.shorts_fabric_color %}قماش الفانلة قبل الهالك{% else %}قماش قبل الهالك (من الوصفة){% endif %}</div>
             <div style="font-size:20px;font-weight:700;color:#4338ca;">{{ original.recipe_planned_fabric_kg|money }} كجم</div>
         </div>
         <div style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 14px;border-radius:6px;">
-            <div style="color:#64748b;font-size:12px;">قماش بالهالك (هيتخصم تلقائياً وقت الإنتاج)</div>
+            <div style="color:#64748b;font-size:12px;">{% if original.shorts_fabric_color %}قماش الفانلة بالهالك{% else %}قماش بالهالك (هيتخصم تلقائياً وقت الإنتاج){% endif %}</div>
             <div style="font-size:20px;font-weight:700;color:#c2410c;">{{ original.recipe_actual_fabric_kg|money }} كجم</div>
         </div>
         <div style="background:#f0fdfa;border:1px solid #99f6e4;padding:10px 14px;border-radius:6px;">
