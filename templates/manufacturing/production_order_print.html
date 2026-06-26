@@ -166,18 +166,29 @@ table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
             <td class="lbl">المنتج الفرعي</td>
             <td colspan="3">{% if order.item %}<b>{{ order.item.code }}</b> — {{ order.item.name_ar }}{% else %}—{% endif %}</td>
         </tr>
+        {% if order.shorts_fabric_color %}
+        <tr>
+            <td class="lbl">نوع القماش</td>
+            <td colspan="5">{% if order.main_product.fabric_type %}{{ order.main_product.fabric_type.name_ar }}{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+            <td class="lbl">لون الفانلة</td>
+            <td><b>{% if order.fabric_color %}{{ order.fabric_color.name_ar }}{% else %}—{% endif %}</b></td>
+            <td class="lbl">وزن الفانلة (قبل الهالك)</td>
+            <td colspan="3"><b>{{ order.recipe_planned_fabric_kg|money:3 }} كجم</b></td>
+        </tr>
+        <tr>
+            <td class="lbl">لون الشورت</td>
+            <td><b>{{ order.shorts_fabric_color.name_ar }}</b></td>
+            <td class="lbl">وزن الشورت (قبل الهالك)</td>
+            <td colspan="3"><b>{{ order.recipe_planned_shorts_fabric_kg|money:3 }} كجم</b></td>
+        </tr>
+        {% else %}
         <tr>
             <td class="lbl">نوع القماش</td>
             <td>{% if order.main_product.fabric_type %}{{ order.main_product.fabric_type.name_ar }}{% else %}—{% endif %}</td>
-            <td class="lbl">{% if order.shorts_fabric_color %}لون الفانلة{% else %}لون القماش{% endif %}</td>
+            <td class="lbl">لون القماش</td>
             <td colspan="3">{% if order.fabric_color %}<b>{{ order.fabric_color.name_ar }}</b>{% else %}كل الألوان (مفيش لون محدّد للموديل){% endif %}</td>
-        </tr>
-        {% if order.shorts_fabric_color %}
-        <tr>
-            <td class="lbl">قماش الشورت</td>
-            <td>{{ order.recipe_actual_shorts_fabric_kg|money:3 }} كجم</td>
-            <td class="lbl">لون الشورت</td>
-            <td colspan="3"><b>{{ order.shorts_fabric_color.name_ar }}</b></td>
         </tr>
         {% endif %}
     </table>
