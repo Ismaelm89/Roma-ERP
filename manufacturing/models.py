@@ -1070,6 +1070,11 @@ class Accessory(models.Model):
         return (Decimal(self.opening_stock or 0) / self.conversion_factor)
 
     @property
+    def opening_cost_per_purchase_unit(self):
+        """تكلفة الوحدة الافتتاحية معبَّراً عنها بوحدة الشراء (للعرض)."""
+        return (Decimal(self.opening_cost or 0) * self.conversion_factor)
+
+    @property
     def opening_value(self):
         """قيمة الرصيد الافتتاحي = الكمية × تكلفة الوحدة الافتتاحية."""
         return (Decimal(self.opening_stock or 0)

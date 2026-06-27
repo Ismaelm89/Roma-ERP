@@ -202,9 +202,9 @@ def accessories(request):
             messages.error(request, str(e))
         return redirect('opening:accessories')
 
-    # prefill: الإكسسوارات اللي ليها بند في قيد الافتتاح بترجّع كميتها وتكلفتها الحالية
-    # (الافتتاح بيكتبهم مباشرة على الصنف، والحارس بيمنع أي حركة تانية تغيّرهم).
-    # المخزون مخزّن بوحدة الاستهلاك → نرجّعه لوحدة الشراء للعرض.
+    # prefill: الإكسسوارات اللي ليها بند في قيد الافتتاح بترجّع كميتها وتكلفتها الافتتاحية
+    # الأصلية (opening_stock الثابت — مش الرصيد الحالي اللي بينقص بالاستهلاك).
+    # الافتتاحي مخزّن بوحدة الاستهلاك → نرجّعه لوحدة الشراء للعرض.
     opened = set(JournalLine.objects
                  .filter(entry__source_doc_type=SRC['accessories'])
                  .exclude(accessory__isnull=True)
@@ -214,8 +214,8 @@ def accessories(request):
         on = a.id in opened
         rows.append({
             'a': a,
-            'qty': _fmt(a.stock_in_purchase_unit) if on else '',
-            'cost': _fmt(a.cost_per_purchase_unit) if on else (_fmt(a.default_unit_cost) or ''),
+            'qty': _fmt(a.opening_in_purchase_unit) if on else '',
+            'cost': _fmt(a.opening_cost_per_purchase_unit) if on else (_fmt(a.default_unit_cost) or ''),
         })
     return render(request, 'opening/accessories.html', {
         'active': 'accessories', 'rows': rows,
