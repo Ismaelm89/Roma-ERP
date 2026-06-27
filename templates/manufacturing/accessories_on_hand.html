@@ -17,13 +17,9 @@
         <div class="muted">عدد الأصناف اللي لها رصيد</div>
         <div style="font-size:22px;font-weight:700;color:#15803d;">{{ total_lines }} صنف</div>
     </div>
-    <div style="flex:1;background:#eef2ff;border:1px solid #c7d2fe;padding:10px;border-radius:6px;">
-        <div class="muted">قيمة الرصيد الافتتاحي</div>
-        <div style="font-size:22px;font-weight:700;color:#4338ca;">{{ total_opening_value|money:2 }} جنيه</div>
-    </div>
     <div style="flex:1;background:#fdf4ff;border:1px solid #f0abfc;padding:10px;border-radius:6px;">
         <div class="muted">قيمة المخزون الحالي</div>
-        <div style="font-size:22px;font-weight:700;color:#86198f;">{{ total_value|money:2 }} جنيه</div>
+        <div style="font-size:22px;font-weight:700;color:#86198f;">{{ total_value|money:0 }} جنيه</div>
     </div>
 </div>
 
@@ -35,10 +31,8 @@
             <th>وحدة الشراء</th>
             <th>وحدة الاستهلاك</th>
             <th class="num">المعدل</th>
-            <th class="num" style="background:#eef2ff;">الافتتاحي بوحدة الشراء</th>
-            <th class="num" style="background:#eef2ff;">الافتتاحي بوحدة الاستهلاك</th>
-            <th class="num">الحالي بوحدة الشراء</th>
-            <th class="num">الحالي بوحدة الاستهلاك</th>
+            <th class="num">الرصيد بوحدة الشراء</th>
+            <th class="num">الرصيد بوحدة الاستهلاك</th>
             <th class="num">سعر/شراء</th>
             <th class="num">سعر/استهلاك</th>
             <th class="num">قيمة المتبقي</th>
@@ -52,16 +46,14 @@
             <td>{{ row.a.purchase_unit }}</td>
             <td>{{ row.a.unit }}</td>
             <td class="num">{{ row.a.units_per_purchase|money:2 }}</td>
-            <td class="num" style="background:#f5f7ff;">{{ row.opening_purchase|money:3 }}</td>
-            <td class="num" style="background:#f5f7ff;"><b>{{ row.opening|money:3 }}</b></td>
-            <td class="num">{{ row.stock_purchase|money:3 }}</td>
-            <td class="num"><b>{{ row.stock|money:3 }}</b></td>
+            <td class="num">{{ row.stock_purchase|money:0 }}</td>
+            <td class="num"><b>{{ row.stock|money:0 }}</b></td>
             <td class="num">{{ row.cost_purchase|money:2 }}</td>
-            <td class="num">{{ row.avg_cost|money:4 }}</td>
-            <td class="num"><b>{{ row.value|money:2 }}</b></td>
+            <td class="num">{{ row.avg_cost|money:2 }}</td>
+            <td class="num"><b>{{ row.value|money:0 }}</b></td>
         </tr>
     {% empty %}
-        <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px;">
+        <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">
             لا توجد أصناف إكسسوارات لها رصيد متبقي.
         </td></tr>
     {% endfor %}
@@ -69,8 +61,8 @@
     {% if rows %}
     <tfoot>
         <tr class="totals">
-            <td colspan="11" style="font-weight:700;">الإجمالي</td>
-            <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_value|money:2 }}</td>
+            <td colspan="9" style="font-weight:700;">الإجمالي</td>
+            <td class="num" style="font-weight:700;border-top:2px solid var(--ink);">{{ total_value|money:0 }}</td>
         </tr>
     </tfoot>
     {% endif %}
