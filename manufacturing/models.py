@@ -1019,6 +1019,12 @@ class Accessory(models.Model):
                                                         'متوسط تكلفة المشتريات')
     current_stock = models.DecimalField('الرصيد الحالي', max_digits=14, decimal_places=3,
                                          default=Decimal('0'), editable=False)
+    opening_stock = models.DecimalField('الرصيد الافتتاحي', max_digits=14, decimal_places=3,
+                                        default=Decimal('0'), editable=False,
+                                        help_text='الكمية اللي اترفع بيها أول مرة في الأرصدة الافتتاحية '
+                                                  '(ثابتة — مش بتتغير بالاستهلاك).')
+    opening_cost = models.DecimalField('تكلفة الوحدة الافتتاحية', max_digits=12, decimal_places=4,
+                                       default=Decimal('0'), editable=False)
     average_cost = models.DecimalField('متوسط التكلفة', max_digits=12, decimal_places=4,
                                         default=Decimal('0'), editable=False)
     supplier = models.ForeignKey('Supplier', null=True, blank=True,
@@ -1057,6 +1063,17 @@ class Accessory(models.Model):
     def cost_per_purchase_unit(self):
         """متوسط التكلفة معبَّراً عنه بوحدة الشراء (للعرض)."""
         return (Decimal(self.average_cost or 0) * self.conversion_factor)
+
+    @property
+    def opening_in_purchase_unit(self):
+        """الرصيد الافتتاحي معبَّراً عنه بوحدة الشراء (للعرض)."""
+        return (Decimal(self.opening_stock or 0) / self.conversion_factor)
+
+    @property
+    def opening_value(self):
+        """قيمة الرصيد الافتتاحي = الكمية × تكلفة الوحدة الافتتاحية."""
+        return (Decimal(self.opening_stock or 0)
+                * Decimal(self.opening_cost or 0)).quantize(Decimal('0.01'))
 
 
 class AccessoryPurchaseInvoice(models.Model):

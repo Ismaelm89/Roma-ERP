@@ -467,7 +467,8 @@ def post_accessories_opening(submitted, date=None):
     # Reset accessories that were opening-only and are no longer set.
     for aid in (prior_ids - clean_ids):
         Accessory.objects.filter(pk=aid).update(
-            current_stock=Decimal('0'), average_cost=Decimal('0'))
+            current_stock=Decimal('0'), average_cost=Decimal('0'),
+            opening_stock=Decimal('0'), opening_cost=Decimal('0'))
 
     if not clean:
         return None
@@ -484,7 +485,9 @@ def post_accessories_opening(submitted, date=None):
             raise OpeningError(f'تكلفة سالبة للإكسسوار {a.name_ar}.')
         value = _q(qty * cost)
         total += value
-        Accessory.objects.filter(pk=a.pk).update(current_stock=qty, average_cost=cost)
+        # current_stock = الرصيد الجاري (بينقص بالاستهلاك). opening_stock = الافتتاحي الثابت.
+        Accessory.objects.filter(pk=a.pk).update(
+            current_stock=qty, average_cost=cost, opening_stock=qty, opening_cost=cost)
         JournalLine.objects.create(
             entry=je, account=acc_inv, debit=value, credit=Decimal('0'),
             accessory=a, description=f'رصيد افتتاحي — {a.name_ar}',

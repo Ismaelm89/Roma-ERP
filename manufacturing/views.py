@@ -58,6 +58,7 @@ def accessories_on_hand(request):
 
     rows = []
     total_value = Decimal('0')
+    total_opening_value = Decimal('0')
     for a in qs:
         stock = Decimal(a.current_stock or 0)
         if stock <= 0:
@@ -68,14 +69,19 @@ def accessories_on_hand(request):
             'a': a, 'stock': stock, 'avg_cost': avg, 'value': value,
             'stock_purchase': a.stock_in_purchase_unit,
             'cost_purchase': a.cost_per_purchase_unit,
+            'opening': Decimal(a.opening_stock or 0),
+            'opening_purchase': a.opening_in_purchase_unit,
+            'opening_value': a.opening_value,
         })
         total_value += value
+        total_opening_value += a.opening_value
 
     context = {
         'company': Company.objects.first(),
         'rows': rows,
         'total_lines': len(rows),
         'total_value': total_value,
+        'total_opening_value': total_opening_value,
     }
     return render(request, 'manufacturing/accessories_on_hand.html', context)
 
