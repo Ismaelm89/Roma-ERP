@@ -1551,3 +1551,146 @@ class ManufacturingWageAdjustment(models.Model):
         from core.serials import assign_if_blank
         assign_if_blank(self, 'adjustment_no', 'MWA-', 4)
         super().save(*args, **kwargs)
+
+
+# ============================================================
+#  Fabric & Accessory stock-take (جرد القماش والإكسسوارات)
+# ============================================================
+
+class FabricStockTake(models.Model):
+    """جرد قماش — تعدّ الكيلوهات الفعلية لكل (نوع قماش × لون) وتقارنها برصيد النظام،
+    والترحيل بيرحّل العجز/الزيادة على «فروق جرد» (5210000):
+        زيادة: DR مخزون القماش / CR فروق جرد
+        عجز:   DR فروق جرد / CR مخزون القماش
+    """
+    take_no = models.CharField('رقم الجرد', max_length=30, unique=True, blank=True,
+                               help_text='سيب الخانة فاضية وهيتولّد تلقائياً (FST-0001 ...)')
+    date = models.DateField('تاريخ الجرد')
+    notes = models.TextField('ملاحظات', blank=True)
+    is_posted = models.BooleanField('مرحّل محاسبياً', default=False, editable=False)
+    journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+', editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'جرد قماش'
+        verbose_name_plural = 'جرد القماش'
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return self.take_no or f'FST-{self.pk}'
+
+    def save(self, *args, **kwargs):
+        from core.serials import assign_if_blank
+        assign_if_blank(self, 'take_no', 'FST-', 4)
+        super().save(*args, **kwargs)
+
+    @property
+    def total_variance_value(self):
+        return sum((l.variance_value for l in self.lines.all()), Decimal('0'))
+
+
+class FabricStockTakeLine(models.Model):
+    """بند جرد قماش — نوع + لون بالكمية الفعلية المعدودة (كيلو)."""
+    stock_take = models.ForeignKey(FabricStockTake, on_delete=models.CASCADE,
+                                   related_name='lines', verbose_name='الجرد')
+    fabric_type = models.ForeignKey(FabricType, on_delete=models.PROTECT,
+                                    related_name='stock_take_lines', verbose_name='نوع القماش')
+    color = models.ForeignKey(FabricColor, on_delete=models.PROTECT,
+                              related_name='stock_take_lines', verbose_name='اللون')
+    counted_kg = models.DecimalField('الكمية الفعلية المعدودة (كيلو)', max_digits=12, decimal_places=3)
+    system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل', max_digits=12,
+                                             decimal_places=3, null=True, blank=True, editable=False)
+    is_posted = models.BooleanField('مرحّل', default=False, editable=False)
+
+    class Meta:
+        verbose_name = 'بند جرد قماش'
+        verbose_name_plural = 'بنود جرد القماش'
+
+    def __str__(self):
+        return f'{self.fabric_type} / {self.color} — عدّ {self.counted_kg}'
+
+    @property
+    def system_qty(self):
+        if self.is_posted and self.system_qty_at_post is not None:
+            return Decimal(self.system_qty_at_post)
+        if self.fabric_type_id and self.color_id:
+            return fabric_available_kg(self.fabric_type, self.color)
+        return Decimal('0')
+
+    @property
+    def variance(self):
+        return (Decimal(self.counted_kg or 0) - self.system_qty).quantize(Decimal('0.001'))
+
+    @property
+    def variance_value(self):
+        cost = fabric_avg_cost(self.fabric_type, self.color) if (self.fabric_type_id and self.color_id) else Decimal('0')
+        return (self.variance * cost).quantize(Decimal('0.01'))
+
+
+class AccessoryStockTake(models.Model):
+    """جرد إكسسوارات — تعدّ الكميات الفعلية (بوحدة الاستهلاك) وتقارنها برصيد النظام،
+    والترحيل بيرحّل العجز/الزيادة على «فروق جرد» (5210000)."""
+    take_no = models.CharField('رقم الجرد', max_length=30, unique=True, blank=True,
+                               help_text='سيب الخانة فاضية وهيتولّد تلقائياً (AST-0001 ...)')
+    date = models.DateField('تاريخ الجرد')
+    notes = models.TextField('ملاحظات', blank=True)
+    is_posted = models.BooleanField('مرحّل محاسبياً', default=False, editable=False)
+    journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+', editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'جرد إكسسوارات'
+        verbose_name_plural = 'جرد الإكسسوارات'
+        ordering = ['-date', '-id']
+
+    def __str__(self):
+        return self.take_no or f'AST-{self.pk}'
+
+    def save(self, *args, **kwargs):
+        from core.serials import assign_if_blank
+        assign_if_blank(self, 'take_no', 'AST-', 4)
+        super().save(*args, **kwargs)
+
+    @property
+    def total_variance_value(self):
+        return sum((l.variance_value for l in self.lines.all()), Decimal('0'))
+
+
+class AccessoryStockTakeLine(models.Model):
+    """بند جرد إكسسوار — صنف واحد بالكمية الفعلية المعدودة (بوحدة الاستهلاك)."""
+    stock_take = models.ForeignKey(AccessoryStockTake, on_delete=models.CASCADE,
+                                   related_name='lines', verbose_name='الجرد')
+    accessory = models.ForeignKey(Accessory, on_delete=models.PROTECT,
+                                  related_name='stock_take_lines', verbose_name='الإكسسوار')
+    counted_qty = models.DecimalField('الكمية الفعلية المعدودة (وحدة الاستهلاك)', max_digits=14, decimal_places=3)
+    system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل', max_digits=14,
+                                             decimal_places=3, null=True, blank=True, editable=False)
+    is_posted = models.BooleanField('مرحّل', default=False, editable=False)
+
+    class Meta:
+        verbose_name = 'بند جرد إكسسوار'
+        verbose_name_plural = 'بنود جرد الإكسسوارات'
+
+    def __str__(self):
+        return f'{self.accessory} — عدّ {self.counted_qty}'
+
+    @property
+    def system_qty(self):
+        if self.is_posted and self.system_qty_at_post is not None:
+            return Decimal(self.system_qty_at_post)
+        return Decimal(self.accessory.current_stock or 0) if self.accessory_id else Decimal('0')
+
+    @property
+    def variance(self):
+        return (Decimal(self.counted_qty or 0) - self.system_qty).quantize(Decimal('0.001'))
+
+    @property
+    def variance_value(self):
+        cost = Decimal(self.accessory.average_cost or 0) if self.accessory_id else Decimal('0')
+        return (self.variance * cost).quantize(Decimal('0.01'))

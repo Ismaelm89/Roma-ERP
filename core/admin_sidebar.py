@@ -23,6 +23,8 @@ SIDEBAR = [
         ('inventory', 'ItemVariant'),
         ('inventory', 'StockMovement'),
         ('inventory', 'StockTake'),
+        ('manufacturing', 'FabricStockTake'),
+        ('manufacturing', 'AccessoryStockTake'),
     ]),
     ('SALES', [
         ('sales', 'Customer'),

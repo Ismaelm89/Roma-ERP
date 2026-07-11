@@ -1157,3 +1157,142 @@ def uncomplete_production_order(order: ProductionOrder, user=None):
         'completed_at', 'completed_by', 'completed_journal_entry',
     ])
     return order
+
+# ============================================================
+#  Fabric & Accessory stock-take posting (جرد القماش والإكسسوارات)
+# ============================================================
+
+class StockTakePostingError(Exception):
+    """Business-rule failure surfaced to the user when posting a fabric/accessory stock-take."""
+
+
+@transaction.atomic
+def post_fabric_stock_take(stock_take, user=None):
+    """رحّل جرد قماش: لكل بند (نوع+لون) ظبط الرصيد على المعدود، ورحّل الفرق على «فروق جرد»:
+        زيادة: DR مخزون القماش / CR فروق جرد
+        عجز:   DR فروق جرد / CR مخزون القماش
+    الزيادة بتتضاف لأكبر دفعة من نفس النوع/اللون؛ العجز بيتخصم FIFO."""
+    if stock_take.is_posted:
+        raise StockTakePostingError(f'الجرد {stock_take.take_no} مرحّل من قبل.')
+    lines = list(stock_take.lines.select_related('fabric_type', 'color').all())
+    if not lines:
+        raise StockTakePostingError('أضف بند واحد على الأقل قبل الترحيل.')
+    for l in lines:
+        if Decimal(l.counted_kg or 0) < 0:
+            raise StockTakePostingError(f'{l.fabric_type}/{l.color}: الكمية المعدودة لا يمكن أن تكون سالبة.')
+
+    fab_acct = get_system_account('FABRIC_INVENTORY')
+    var_acct = get_system_account('INVENTORY_VARIANCE')
+    je = JournalEntry.objects.create(
+        date=stock_take.date, reference=stock_take.take_no,
+        description=f'جرد قماش {stock_take.take_no}',
+        status='POSTED', source_doc_type='FabricStockTake', source_doc_id=stock_take.id,
+        created_by=user)
+    any_gl = False
+    for l in lines:
+        ft, color = l.fabric_type, l.color
+        sys_qty = fabric_available_kg(ft, color)
+        counted = Decimal(l.counted_kg or 0)
+        var = (counted - sys_qty).quantize(Decimal('0.001'))
+        cost = fabric_avg_cost(ft, color)
+        l.system_qty_at_post = sys_qty
+        if var > 0:                          # زيادة — أضف لأكبر دفعة
+            b = (FabricBatch.objects.select_for_update()
+                 .filter(fabric_type=ft, color=color).order_by('-in_stock_qty_kg', '-id').first())
+            if b is None:
+                raise StockTakePostingError(
+                    f'{ft.name_ar}/{color.name_ar}: مفيش دفعة قماش من اللون ده — اشترِ/أضف دفعة الأول.')
+            b.in_stock_qty_kg = Decimal(b.in_stock_qty_kg or 0) + var
+            b.save(update_fields=['in_stock_qty_kg'])
+        elif var < 0:                        # عجز — اخصم FIFO
+            remaining = -var
+            for b in (FabricBatch.objects.select_for_update()
+                      .filter(fabric_type=ft, color=color, in_stock_qty_kg__gt=0)
+                      .order_by('purchase_date', 'id')):
+                if remaining <= 0:
+                    break
+                take = min(Decimal(b.in_stock_qty_kg), remaining)
+                b.in_stock_qty_kg = Decimal(b.in_stock_qty_kg) - take
+                b.save(update_fields=['in_stock_qty_kg'])
+                remaining -= take
+            if remaining > Decimal('0.001'):
+                raise StockTakePostingError(
+                    f'{ft.name_ar}/{color.name_ar}: العجز ({-var} كجم) أكبر من المتاح — راجع الأرقام.')
+        value = _q(abs(var) * cost)
+        if value > 0:
+            any_gl = True
+            desc = f'{"زيادة" if var>0 else "عجز"} جرد قماش — {ft.name_ar}/{color.name_ar}'
+            if var > 0:
+                JournalLine.objects.create(entry=je, account=fab_acct, debit=value, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=var_acct, debit=Decimal('0'), credit=value, description=desc)
+            else:
+                JournalLine.objects.create(entry=je, account=var_acct, debit=value, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=fab_acct, debit=Decimal('0'), credit=value, description=desc)
+        l.is_posted = True
+        l.save(update_fields=['system_qty_at_post', 'is_posted'])
+
+    je.recalc_totals()
+    if je.total_debit != je.total_credit:
+        raise AssertionError('fabric stock-take JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
+    if not any_gl:
+        je.delete(); je = None
+    stock_take.is_posted = True
+    stock_take.journal_entry = je
+    stock_take.save(update_fields=['is_posted', 'journal_entry'])
+    return je
+
+
+@transaction.atomic
+def post_accessory_stock_take(stock_take, user=None):
+    """رحّل جرد إكسسوارات: لكل بند ظبط الرصيد الحالي على المعدود، ورحّل الفرق على «فروق جرد»:
+        زيادة: DR مخزون الإكسسوارات / CR فروق جرد
+        عجز:   DR فروق جرد / CR مخزون الإكسسوارات"""
+    if stock_take.is_posted:
+        raise StockTakePostingError(f'الجرد {stock_take.take_no} مرحّل من قبل.')
+    lines = list(stock_take.lines.select_related('accessory').all())
+    if not lines:
+        raise StockTakePostingError('أضف بند واحد على الأقل قبل الترحيل.')
+    for l in lines:
+        if Decimal(l.counted_qty or 0) < 0:
+            raise StockTakePostingError(f'{l.accessory}: الكمية المعدودة لا يمكن أن تكون سالبة.')
+
+    acc_acct = get_system_account('ACCESSORY_INVENTORY')
+    var_acct = get_system_account('INVENTORY_VARIANCE')
+    je = JournalEntry.objects.create(
+        date=stock_take.date, reference=stock_take.take_no,
+        description=f'جرد إكسسوارات {stock_take.take_no}',
+        status='POSTED', source_doc_type='AccessoryStockTake', source_doc_id=stock_take.id,
+        created_by=user)
+    any_gl = False
+    for l in lines:
+        acc = Accessory.objects.select_for_update().get(pk=l.accessory_id)
+        sys_qty = Decimal(acc.current_stock or 0)
+        counted = Decimal(l.counted_qty or 0)
+        var = (counted - sys_qty).quantize(Decimal('0.001'))
+        cost = Decimal(acc.average_cost or 0)
+        l.system_qty_at_post = sys_qty
+        if var != 0:
+            acc.current_stock = counted
+            acc.save(update_fields=['current_stock'])
+        value = _q(abs(var) * cost)
+        if value > 0:
+            any_gl = True
+            desc = f'{"زيادة" if var>0 else "عجز"} جرد إكسسوار — {acc.name_ar}'
+            if var > 0:
+                JournalLine.objects.create(entry=je, account=acc_acct, debit=value, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=var_acct, debit=Decimal('0'), credit=value, description=desc)
+            else:
+                JournalLine.objects.create(entry=je, account=var_acct, debit=value, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=acc_acct, debit=Decimal('0'), credit=value, description=desc)
+        l.is_posted = True
+        l.save(update_fields=['system_qty_at_post', 'is_posted'])
+
+    je.recalc_totals()
+    if je.total_debit != je.total_credit:
+        raise AssertionError('accessory stock-take JE unbalanced' + f' ({je.total_debit} != {je.total_credit})')
+    if not any_gl:
+        je.delete(); je = None
+    stock_take.is_posted = True
+    stock_take.journal_entry = je
+    stock_take.save(update_fields=['is_posted', 'journal_entry'])
+    return je
