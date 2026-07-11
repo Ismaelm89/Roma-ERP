@@ -1266,24 +1266,26 @@ def post_accessory_stock_take(stock_take, user=None):
     any_gl = False
     for l in lines:
         acc = Accessory.objects.select_for_update().get(pk=l.accessory_id)
-        sys_qty = Decimal(acc.current_stock or 0)
-        counted = Decimal(l.counted_qty or 0)
-        var = (counted - sys_qty).quantize(Decimal('0.001'))
-        cost = Decimal(acc.average_cost or 0)
-        l.system_qty_at_post = sys_qty
-        if var != 0:
-            acc.current_stock = counted
-            acc.save(update_fields=['current_stock'])
-        value = _q(abs(var) * cost)
-        if value > 0:
+        factor = acc.conversion_factor
+        last_price = acc.last_purchase_cost            # بوحدة الشراء
+        counted_p = Decimal(l.counted_qty or 0)        # المعدود بوحدة الشراء
+        l.system_qty_at_post = (Decimal(acc.current_stock or 0) / factor)
+        old_value = _q(Decimal(acc.current_stock or 0) * Decimal(acc.average_cost or 0))
+        # ظبط الرصيد على المعدود + إعادة التقييم بآخر سعر شراء
+        acc.current_stock = (counted_p * factor)
+        acc.average_cost = (last_price / factor) if factor else last_price
+        acc.save(update_fields=['current_stock', 'average_cost'])
+        new_value = _q(counted_p * last_price)
+        diff = _q(new_value - old_value)               # موجب = زيادة قيمة (ربح)
+        if diff != 0:
             any_gl = True
-            desc = f'{"زيادة" if var>0 else "عجز"} جرد إكسسوار — {acc.name_ar}'
-            if var > 0:
-                JournalLine.objects.create(entry=je, account=acc_acct, debit=value, credit=Decimal('0'), description=desc)
-                JournalLine.objects.create(entry=je, account=var_acct, debit=Decimal('0'), credit=value, description=desc)
-            else:
-                JournalLine.objects.create(entry=je, account=var_acct, debit=value, credit=Decimal('0'), description=desc)
-                JournalLine.objects.create(entry=je, account=acc_acct, debit=Decimal('0'), credit=value, description=desc)
+            desc = f'جرد إكسسوار (تقييم آخر سعر شراء) — {acc.name_ar}'
+            if diff > 0:   # زيادة: DR مخزون الإكسسوارات / CR فروق جرد
+                JournalLine.objects.create(entry=je, account=acc_acct, debit=diff, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=var_acct, debit=Decimal('0'), credit=diff, description=desc)
+            else:          # نقص: DR فروق جرد / CR مخزون الإكسسوارات
+                JournalLine.objects.create(entry=je, account=var_acct, debit=-diff, credit=Decimal('0'), description=desc)
+                JournalLine.objects.create(entry=je, account=acc_acct, debit=Decimal('0'), credit=-diff, description=desc)
         l.is_posted = True
         l.save(update_fields=['system_qty_at_post', 'is_posted'])
 

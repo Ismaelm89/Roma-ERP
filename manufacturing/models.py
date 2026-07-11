@@ -1060,6 +1060,18 @@ class Accessory(models.Model):
         return (Decimal(self.current_stock or 0) / self.conversion_factor)
 
     @property
+    def last_purchase_cost(self):
+        """آخر سعر شراء (بوحدة الشراء). لو مفيش شراء بيرجّع المتوسط بوحدة الشراء
+        أو السعر الاسترشادي — بيُستخدم في تقييم فرق الجرد."""
+        p = (AccessoryPurchase.objects.filter(accessory=self)
+             .order_by('-date', '-id').first())
+        if p and Decimal(p.unit_cost or 0) > 0:
+            return Decimal(p.unit_cost)
+        if Decimal(self.average_cost or 0) > 0:
+            return (Decimal(self.average_cost) * self.conversion_factor)
+        return Decimal(self.default_unit_cost or 0)
+
+    @property
     def cost_per_purchase_unit(self):
         """متوسط التكلفة معبَّراً عنه بوحدة الشراء (للعرض)."""
         return (Decimal(self.average_cost or 0) * self.conversion_factor)
@@ -1668,8 +1680,8 @@ class AccessoryStockTakeLine(models.Model):
                                    related_name='lines', verbose_name='الجرد')
     accessory = models.ForeignKey(Accessory, on_delete=models.PROTECT,
                                   related_name='stock_take_lines', verbose_name='الإكسسوار')
-    counted_qty = models.DecimalField('الكمية الفعلية المعدودة (وحدة الاستهلاك)', max_digits=14, decimal_places=3)
-    system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل', max_digits=14,
+    counted_qty = models.DecimalField('الكمية الفعلية المعدودة (بوحدة الشراء)', max_digits=14, decimal_places=3)
+    system_qty_at_post = models.DecimalField('رصيد النظام وقت الترحيل (بوحدة الشراء)', max_digits=14,
                                              decimal_places=3, null=True, blank=True, editable=False)
     is_posted = models.BooleanField('مرحّل', default=False, editable=False)
 
@@ -1682,15 +1694,23 @@ class AccessoryStockTakeLine(models.Model):
 
     @property
     def system_qty(self):
+        """رصيد النظام معبَّراً عنه بوحدة الشراء."""
         if self.is_posted and self.system_qty_at_post is not None:
             return Decimal(self.system_qty_at_post)
-        return Decimal(self.accessory.current_stock or 0) if self.accessory_id else Decimal('0')
+        return self.accessory.stock_in_purchase_unit if self.accessory_id else Decimal('0')
 
     @property
     def variance(self):
+        """الفرق بوحدة الشراء (معدود − نظام)."""
         return (Decimal(self.counted_qty or 0) - self.system_qty).quantize(Decimal('0.001'))
 
     @property
     def variance_value(self):
-        cost = Decimal(self.accessory.average_cost or 0) if self.accessory_id else Decimal('0')
-        return (self.variance * cost).quantize(Decimal('0.01'))
+        """قيمة الفرق = (المعدود × آخر سعر شراء) − قيمة الرصيد الحالي.
+        التقييم بآخر سعر شراء زي ما طلب المستخدم."""
+        if not self.accessory_id:
+            return Decimal('0')
+        a = self.accessory
+        new_value = Decimal(self.counted_qty or 0) * a.last_purchase_cost
+        old_value = Decimal(a.current_stock or 0) * Decimal(a.average_cost or 0)
+        return (new_value - old_value).quantize(Decimal('0.01'))
