@@ -791,8 +791,78 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
                ProductionQualityInline, ProductionIroningInline,
                AccessoryUsageInline]
     actions = ('action_load_recipe', 'action_produce', 'action_cancel',
-               'action_uncomplete')
+               'action_uncomplete', 'action_make_invoice')
     change_form_template = 'admin/manufacturing/productionorder/change_form.html'
+
+    @admin.action(description='🧾 اعمل/ضيف لفاتورة بيع من الأوامر المختارة')
+    def action_make_invoice(self, request, queryset):
+        from django.db import transaction
+        from django.template.response import TemplateResponse
+        from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+        from datetime import date as _date
+        from sales.models import SalesInvoice, Customer
+        from sales.services import add_orders_to_invoice
+        # الأوامر الصالحة = مكتملة + لسه ماتفوترتش
+        eligible = list(queryset.filter(status='COMPLETED', sales_invoice__isnull=True)
+                        .select_related('item', 'customer'))
+        elig_ids = {o.pk for o in eligible}
+        skipped = [o.order_no for o in queryset if o.pk not in elig_ids]
+        if skipped:
+            self.message_user(request, 'اتشالوا (مش مكتملين أو اتفوتروا قبل كده): '
+                              + '، '.join(skipped), level=messages.WARNING)
+        if not eligible:
+            self.message_user(request, 'مفيش أوامر صالحة — لازم تكون «مكتملة» ولسه ماتفوترتش.',
+                              level=messages.ERROR)
+            return None
+
+        def render(mismatch=False):
+            ctx = {
+                **self.admin_site.each_context(request),
+                'title': 'اعمل/ضيف لفاتورة بيع من أوامر التصنيع',
+                'orders': eligible,
+                'customers': Customer.objects.order_by('name_ar'),
+                'draft_invoices': SalesInvoice.objects.filter(status='DRAFT')
+                                  .select_related('customer').order_by('-invoice_no'),
+                'opts': self.model._meta,
+                'action_checkbox_name': ACTION_CHECKBOX_NAME,
+                'mismatch_warning': mismatch,
+            }
+            return TemplateResponse(request,
+                'admin/manufacturing/productionorder/make_invoice.html', ctx)
+
+        if not request.POST.get('apply'):
+            return render()
+
+        target = request.POST.get('target')          # 'new' / 'existing'
+        confirmed = request.POST.get('confirm_mismatch') == 'on'
+        order_custs = {o.customer_id for o in eligible if o.customer_id}
+        inv = None
+        if target == 'existing':
+            inv = SalesInvoice.objects.filter(pk=request.POST.get('invoice'),
+                                              status='DRAFT').first()
+            if not inv:
+                self.message_user(request, 'اختار فاتورة مسودة صحيحة.', level=messages.ERROR)
+                return render()
+            target_cust = inv.customer_id
+        else:
+            cust = Customer.objects.filter(pk=request.POST.get('customer')).first()
+            if not cust:
+                self.message_user(request, 'اختار العميل للفاتورة الجديدة.', level=messages.ERROR)
+                return render()
+            target_cust = cust.id
+        # تنبيه اختلاف العميل
+        if any(c != target_cust for c in order_custs) and not confirmed:
+            self.message_user(request, '⚠️ عميل الأمر مختلف عن عميل الفاتورة — أكّد لو متأكد.',
+                              level=messages.WARNING)
+            return render(mismatch=True)
+        with transaction.atomic():
+            if inv is None:
+                inv = SalesInvoice.objects.create(customer_id=target_cust,
+                                                  date=_date.today(), status='DRAFT')
+            n = add_orders_to_invoice(inv, eligible, user=request.user)
+        self.message_user(request, f'تمت إضافة {n} بند من {len(eligible)} أمر للفاتورة '
+                          f'{inv.invoice_no} (مسودة).', level=messages.SUCCESS)
+        return redirect(reverse('admin:sales_salesinvoice_change', args=[inv.pk]))
 
     class Media:
         js = ('manufacturing/submodel_sync.js', 'manufacturing/stage_autonumber.js')

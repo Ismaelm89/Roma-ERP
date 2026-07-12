@@ -424,3 +424,34 @@ def cancel_sales_return(return_doc, user=None):
     return_doc.status = 'CANCELLED'
     return_doc.save(update_fields=['status'])
     return rev
+
+
+def add_orders_to_invoice(invoice, orders, user=None):
+    """يبني بنود فاتورة بيع من أوامر إنتاج مكتملة (مقاس + كمية لكل أمر) ويربط كل أمر بالفاتورة.
+    السعر بيتملأ تلقائياً من وصفة المنتج (piece price). بيرجّع عدد البنود المضافة."""
+    from decimal import Decimal
+    from manufacturing.models import Size
+    from inventory.models import ItemVariant
+    from .models import SalesInvoiceLine
+    added = 0
+    for o in orders:
+        item = o.item
+        if not item:
+            continue
+        for size_id, qty in o._pieces_by_size().items():
+            if not qty:
+                continue
+            size = Size.objects.filter(pk=size_id).first()
+            if not size:
+                continue
+            variant = ItemVariant.objects.filter(item=item, size=size.code).first()
+            if not variant:
+                continue
+            SalesInvoiceLine.objects.create(
+                invoice=invoice, variant=variant,
+                sale_unit='PIECE', quantity=Decimal(qty), unit_price=Decimal('0'))
+            added += 1
+        o.sales_invoice = invoice
+        o.save(update_fields=['sales_invoice'])
+    invoice.recalc_totals()
+    return added

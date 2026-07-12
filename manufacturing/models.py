@@ -469,6 +469,10 @@ class ProductionOrder(models.Model):
                                   on_delete=models.PROTECT, related_name='production_orders',
                                   verbose_name='العميل (اختياري)',
                                   help_text='لو الإنتاج لعميل معين بطلبية مخصصة')
+    sales_invoice = models.ForeignKey('sales.SalesInvoice', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='production_orders',
+                                      editable=False, verbose_name='فاتورة البيع',
+                                      help_text='بتتسجّل لما الأمر يتحوّل لبنود فاتورة بيع.')
     notes = models.TextField('ملاحظات', blank=True)
 
     status = models.CharField('الحالة', max_length=15, choices=STATUS_CHOICES, default='DRAFT')
