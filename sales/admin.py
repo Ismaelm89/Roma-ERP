@@ -174,12 +174,88 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
             extra_context['show_cancel_button'] = obj.status == 'POSTED'
             extra_context['print_url_original'] = base + '?copy=original'
             extra_context['print_url_copy'] = base + '?copy=copy'
+            # "Add products from production orders" — only while still a draft
+            if obj.status == 'DRAFT':
+                extra_context['add_from_orders_url'] = reverse(
+                    'admin:sales_salesinvoice_add_from_orders', args=[obj.pk]
+                )
             # "Create return" shortcut — only when invoice is posted
             if obj.status == 'POSTED':
                 extra_context['create_return_url'] = reverse(
                     'sales:create_return_from_invoice', args=[obj.pk]
                 )
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    # ---- Add products from production orders (reverse of the list-page action) ----
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom = [
+            path(
+                '<int:invoice_id>/add-from-orders/',
+                self.admin_site.admin_view(self.add_from_orders_view),
+                name='sales_salesinvoice_add_from_orders',
+            ),
+        ]
+        return custom + urls
+
+    def add_from_orders_view(self, request, invoice_id):
+        from django.shortcuts import get_object_or_404, render
+        from django.db import transaction
+        from manufacturing.models import ProductionOrder
+        from .services import add_orders_to_invoice
+
+        invoice = get_object_or_404(SalesInvoice, pk=invoice_id)
+        change_url = reverse('admin:sales_salesinvoice_change', args=[invoice.pk])
+
+        if invoice.status != 'DRAFT':
+            messages.error(request, 'لا يمكن إضافة بنود إلا لفاتورة مسودة.')
+            return HttpResponseRedirect(change_url)
+
+        # Eligible: produced (COMPLETED) and not yet linked to any invoice.
+        eligible = (ProductionOrder.objects
+                    .filter(status='COMPLETED', sales_invoice__isnull=True)
+                    .select_related('customer', 'item')
+                    .order_by('-id'))
+
+        if request.method == 'POST':
+            order_ids = request.POST.getlist('orders')
+            confirm_mismatch = bool(request.POST.get('confirm_mismatch'))
+            orders = list(eligible.filter(pk__in=order_ids))
+            if not orders:
+                messages.warning(request, 'ماختارتش أي أمر إنتاج صالح.')
+                return HttpResponseRedirect(request.path)
+
+            # Customer-mismatch guard vs the invoice's customer.
+            mismatch = any(
+                o.customer_id and invoice.customer_id and o.customer_id != invoice.customer_id
+                for o in orders
+            )
+            if mismatch and not confirm_mismatch:
+                messages.warning(
+                    request,
+                    'في أمر إنتاج عميله مختلف عن عميل الفاتورة. راجع واعلّم «أنا متأكد» لو عايز تكمّل.'
+                )
+                # fall through to re-render the picker with the warning
+            else:
+                with transaction.atomic():
+                    n = add_orders_to_invoice(invoice, orders, user=request.user)
+                    invoice.recalc_totals()
+                messages.success(
+                    request,
+                    f'تمت إضافة {n} بند من {len(orders)} أمر إنتاج للفاتورة {invoice.invoice_no}.'
+                )
+                return HttpResponseRedirect(change_url)
+
+        ctx = {
+            **self.admin_site.each_context(request),
+            'title': f'أضف من أوامر الإنتاج → {invoice.invoice_no}',
+            'invoice': invoice,
+            'orders': eligible,
+            'opts': self.model._meta,
+            'change_url': change_url,
+        }
+        return render(request, 'admin/sales/salesinvoice/add_from_orders.html', ctx)
 
     def response_change(self, request, obj):
         if '_post_invoice' in request.POST:
