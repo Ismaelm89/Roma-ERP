@@ -447,9 +447,11 @@ def add_orders_to_invoice(invoice, orders, user=None):
             variant = ItemVariant.objects.filter(item=item, size=size.code).first()
             if not variant:
                 continue
-            SalesInvoiceLine.objects.create(
+            line = SalesInvoiceLine.objects.create(
                 invoice=invoice, variant=variant,
                 sale_unit='PIECE', quantity=Decimal(qty), unit_price=Decimal('0'))
+            line.recalc()                       # يحسب line_total من (سعر × كمية) بعد ملء السعر
+            line.save(update_fields=['line_total'])
             added += 1
         o.sales_invoice = invoice
         o.save(update_fields=['sales_invoice'])
