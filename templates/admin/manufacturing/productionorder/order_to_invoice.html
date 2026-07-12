@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div dir="rtl" style="max-width:760px;">
+  <p style="margin:0 0 12px;"><a href="{{ change_url }}">‹ رجوع للأمر {{ order.order_no }}</a></p>
+
+  <div style="background:#eef2ff;border:1px solid #c7d2fe;padding:12px;border-radius:6px;margin-bottom:16px;">
+    الأمر <b>{{ order.order_no }}</b> — {{ order.item.name_ar }} — <b>{{ order.total_pieces }}</b> قطعة
+    · العميل: <b>{% if order.customer %}{{ order.customer.name_ar }}{% else %}<span style="color:#999;">— بدون عميل —</span>{% endif %}</b>
+  </div>
+
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="mode" value="{{ mode }}">
+
+    {% if mode == 'existing' %}
+      <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:14px;border-radius:6px;">
+        <p style="margin:0 0 8px;"><b>➕ أضف لفاتورة بيع مسودة:</b></p>
+        {% if draft_invoices %}
+        <select name="invoice" style="min-width:340px;">
+          <option value="">— اختار فاتورة مسودة —</option>
+          {% for i in draft_invoices %}
+            <option value="{{ i.pk }}" {% if sel.invoice == i.pk|stringformat:'s' %}selected{% endif %}>
+              {{ i.invoice_no }} — {% if i.customer %}{{ i.customer.name_ar }}{% else %}بدون عميل{% endif %}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+          <p style="color:#999;margin:0;">مفيش فواتير بيع مسودة حالياً. استخدم «اعمل فاتورة بيع» بدلها.</p>
+        {% endif %}
+      </div>
+    {% else %}
+      <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:14px;border-radius:6px;">
+        <p style="margin:0 0 8px;"><b>🧾 فاتورة بيع جديدة للعميل:</b></p>
+        <select name="customer" style="min-width:300px;">
+          {% for c in customers %}
+            <option value="{{ c.pk }}"
+              {% if sel.customer %}{% if sel.customer == c.pk|stringformat:'s' %}selected{% endif %}{% elif c.pk == default_customer_id %}selected{% endif %}>{{ c.name_ar }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    {% if mismatch_warning %}
+    <div style="background:#fef3c7;border:1px solid #fbbf24;padding:12px;border-radius:6px;margin-top:12px;color:#92400e;">
+      ⚠️ عميل الأمر مختلف عن عميل الفاتورة. علّم «أنا متأكد» تحت لو عايز تكمّل.
+    </div>
+    {% endif %}
+    <p style="margin:12px 0;"><label style="color:#b45309;">
+      <input type="checkbox" name="confirm_mismatch"> أنا متأكد وأكمل (حتى لو العميل مختلف)</label></p>
+
+    <div>
+      <button type="submit" class="default" style="padding:8px 18px;">🧾 تمام — اكمل</button>
+      <a href="{{ change_url }}" style="margin-inline-start:12px;">إلغاء</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

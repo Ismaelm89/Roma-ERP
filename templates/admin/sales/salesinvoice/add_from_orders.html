@@ -16,8 +16,22 @@
     <a href="{{ change_url }}">رجوع</a>
   {% else %}
   <form method="post">{% csrf_token %}
-    <h2>اختار أوامر الإنتاج ({{ orders|length }} متاح)</h2>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+    <h2>اختار أوامر الإنتاج (<span id="visCount">{{ orders|length }}</span> / {{ orders|length }})</h2>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <input type="text" id="orderSearch" placeholder="🔎 دوّر بالأمر / الصنف / العميل…"
+             style="flex:1;min-width:240px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;">
+      <button type="button" id="selectAllVisible"
+              style="background:#4338ca;color:white;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;">
+        ✔️ اختار كل اللى ظاهر
+      </button>
+      <button type="button" id="clearAll"
+              style="background:#e2e8f0;color:#334155;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;">
+        ✖️ الغِ الكل
+      </button>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;" id="ordersTable">
       <thead><tr style="background:#f5f5f5;">
         <th style="padding:6px;border-bottom:1px solid #ddd;width:36px;"></th>
         <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">الأمر</th>
@@ -27,7 +41,7 @@
       </tr></thead>
       <tbody>
       {% for o in orders %}
-        <tr>
+        <tr data-search="{{ o.order_no }} {{ o.item.name_ar|default:'' }} {% if o.customer %}{{ o.customer.name_ar }}{% endif %}">
           <td style="padding:6px;border-bottom:1px solid #eee;text-align:center;">
             <input type="checkbox" name="orders" value="{{ o.pk }}"
               {% if invoice.customer_id and o.customer_id and o.customer_id != invoice.customer_id %}data-mismatch="1"{% endif %}>
@@ -59,4 +73,47 @@
   </form>
   {% endif %}
 </div>
+
+<script>
+(function () {
+  var search = document.getElementById('orderSearch');
+  var table  = document.getElementById('ordersTable');
+  if (!search || !table) return;
+  var rows = Array.prototype.slice.call(table.tBodies[0].rows);
+  var visCount = document.getElementById('visCount');
+
+  function norm(s) { return (s || '').toString().toLowerCase().trim(); }
+
+  function apply() {
+    var q = norm(search.value);
+    var shown = 0;
+    rows.forEach(function (r) {
+      var hit = !q || norm(r.getAttribute('data-search')).indexOf(q) !== -1;
+      r.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    if (visCount) visCount.textContent = shown;
+  }
+
+  function visibleBoxes() {
+    return rows.filter(function (r) { return r.style.display !== 'none'; })
+               .map(function (r) { return r.querySelector('input[type=checkbox]'); })
+               .filter(Boolean);
+  }
+
+  search.addEventListener('input', apply);
+  var selBtn = document.getElementById('selectAllVisible');
+  if (selBtn) selBtn.addEventListener('click', function () {
+    visibleBoxes().forEach(function (b) { b.checked = true; });
+  });
+  var clrBtn = document.getElementById('clearAll');
+  if (clrBtn) clrBtn.addEventListener('click', function () {
+    rows.forEach(function (r) {
+      var b = r.querySelector('input[type=checkbox]'); if (b) b.checked = false;
+    });
+  });
+
+  apply();
+})();
+</script>
 {% endblock %}

@@ -154,6 +154,26 @@
 
 {% block submit_buttons_bottom %}
 {% submit_row %}
+{% if original and original.status == 'COMPLETED' %}
+<div class="submit-row" style="margin-top:-12px;background:transparent;border:none;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+  {% if original.sales_invoice %}
+    <a href="{% url 'admin:sales_salesinvoice_change' original.sales_invoice.pk %}"
+       style="background:#0f766e;color:white;font-weight:700;padding:10px 18px;border-radius:4px;text-decoration:none;">
+       🧾 الأمر متفوتر — افتح الفاتورة {{ original.sales_invoice.invoice_no }}
+    </a>
+  {% else %}
+    <a href="{% url 'admin:manufacturing_productionorder_to_invoice' original.pk %}?mode=new"
+       style="background:#15803d;color:white;font-weight:700;padding:10px 18px;border-radius:4px;text-decoration:none;">
+       🧾 اعمل فاتورة بيع
+    </a>
+    <a href="{% url 'admin:manufacturing_productionorder_to_invoice' original.pk %}?mode=existing"
+       style="background:#4338ca;color:white;font-weight:700;padding:10px 18px;border-radius:4px;text-decoration:none;">
+       ➕ أضف لفاتورة بيع مسودة
+    </a>
+    <span style="color:#666;font-size:12px;">اعمل بيه فاتورة بيع جديدة أو ضيفه لفاتورة لسه مسودة.</span>
+  {% endif %}
+</div>
+{% endif %}
 {% if not original or original.status == 'DRAFT' %}
 <div class="submit-row" style="margin-top:-12px;background:transparent;border:none;">
     <input type="submit" value="📋 حفظ وحمّل الإكسسوارات + افحص القماش"

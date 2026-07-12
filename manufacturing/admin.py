@@ -1107,6 +1107,91 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
                 self.message_user(request, f'فشل الإنتاج: {e}', level=messages.ERROR)
         return redirect(reverse('admin:manufacturing_productionorder_change', args=[obj.pk]))
 
+    # ---- من أمر إنتاج مكتمل → فاتورة بيع (جديدة أو إضافة لمسودة) ----
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom = [
+            path('<int:order_id>/to-invoice/',
+                 self.admin_site.admin_view(self.order_to_invoice_view),
+                 name='manufacturing_productionorder_to_invoice'),
+        ]
+        return custom + urls
+
+    def order_to_invoice_view(self, request, order_id):
+        from django.shortcuts import get_object_or_404, render
+        from django.db import transaction
+        from datetime import date as _date
+        from sales.models import SalesInvoice, Customer
+        from sales.services import add_orders_to_invoice
+
+        order = get_object_or_404(ProductionOrder, pk=order_id)
+        change_url = reverse('admin:manufacturing_productionorder_change', args=[order.pk])
+        if order.status != 'COMPLETED':
+            self.message_user(request, 'الأمر لسه ماتنتجش — اعمل «انتج» الأول.', level=messages.ERROR)
+            return redirect(change_url)
+        if order.sales_invoice_id:
+            self.message_user(
+                request,
+                f'الأمر متفوتر قبل كده في الفاتورة {order.sales_invoice.invoice_no}.',
+                level=messages.WARNING)
+            return redirect(reverse('admin:sales_salesinvoice_change', args=[order.sales_invoice_id]))
+
+        mode = request.POST.get('mode') or request.GET.get('mode') or 'new'
+        draft_invoices = (SalesInvoice.objects.filter(status='DRAFT')
+                          .select_related('customer').order_by('-invoice_no'))
+        sel = {}
+
+        def render_page(mismatch=False):
+            ctx = {
+                **self.admin_site.each_context(request),
+                'title': f'فاتورة بيع من الأمر {order.order_no}',
+                'order': order,
+                'opts': self.model._meta,
+                'mode': mode,
+                'customers': Customer.objects.order_by('name_ar'),
+                'draft_invoices': draft_invoices,
+                'default_customer_id': order.customer_id,
+                'mismatch_warning': mismatch,
+                'change_url': change_url,
+                'sel': sel,
+            }
+            return render(request, 'admin/manufacturing/productionorder/order_to_invoice.html', ctx)
+
+        if request.method == 'POST':
+            confirmed = request.POST.get('confirm_mismatch') == 'on'
+            sel = {'customer': request.POST.get('customer'), 'invoice': request.POST.get('invoice')}
+            inv = None
+            if mode == 'existing':
+                inv = draft_invoices.filter(pk=request.POST.get('invoice')).first()
+                if not inv:
+                    self.message_user(request, 'اختار فاتورة مسودة صحيحة.', level=messages.ERROR)
+                    return render_page()
+                target_cust = inv.customer_id
+            else:
+                cust = Customer.objects.filter(pk=request.POST.get('customer')).first()
+                if not cust:
+                    self.message_user(request, 'اختار العميل للفاتورة الجديدة.', level=messages.ERROR)
+                    return render_page()
+                target_cust = cust.id
+            if (order.customer_id and target_cust and order.customer_id != target_cust
+                    and not confirmed):
+                self.message_user(request, '⚠️ عميل الأمر مختلف عن عميل الفاتورة — أكّد لو متأكد.',
+                                  level=messages.WARNING)
+                return render_page(mismatch=True)
+            with transaction.atomic():
+                if inv is None:
+                    inv = SalesInvoice.objects.create(customer_id=target_cust,
+                                                      date=_date.today(), status='DRAFT')
+                n = add_orders_to_invoice(inv, [order], user=request.user)
+            self.message_user(
+                request,
+                f'تمت إضافة {n} بند من الأمر {order.order_no} للفاتورة {inv.invoice_no} (مسودة).',
+                level=messages.SUCCESS)
+            return redirect(reverse('admin:sales_salesinvoice_change', args=[inv.pk]))
+
+        return render_page()
+
 
 # ============================================================
 #  Masters: sizes + product notes + accessories (Phase 2c)
