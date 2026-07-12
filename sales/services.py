@@ -428,32 +428,44 @@ def cancel_sales_return(return_doc, user=None):
 
 def add_orders_to_invoice(invoice, orders, user=None):
     """يبني بنود فاتورة بيع من أوامر إنتاج مكتملة (مقاس + كمية لكل أمر) ويربط كل أمر بالفاتورة.
-    السعر بيتملأ تلقائياً من وصفة المنتج (piece price). بيرجّع عدد البنود المضافة."""
+    السعر بيتملأ تلقائياً من وصفة المنتج (piece price). بيرجّع عدد البنود المضافة.
+
+    آمن ضد الإضافة المزدوجة: بيقفل صفوف الأوامر (select_for_update) وبيتجاهل أي أمر
+    مربوط بفاتورة قبل كده — فلو الفورم اتبعت مرتين (double-submit) مش هتتكرر البنود."""
     from decimal import Decimal
-    from manufacturing.models import Size
+    from django.db import transaction
+    from manufacturing.models import Size, ProductionOrder
     from inventory.models import ItemVariant
     from .models import SalesInvoiceLine
     added = 0
-    for o in orders:
-        item = o.item
-        if not item:
-            continue
-        for size_id, qty in o._pieces_by_size().items():
-            if not qty:
+    order_ids = [o.pk for o in orders]
+    with transaction.atomic():
+        # نعيد جلب الأوامر مع قفل الصفوف داخل المعاملة عشان أي طلب متزامن يستنّى
+        locked = list(ProductionOrder.objects.select_for_update()
+                      .filter(pk__in=order_ids))
+        for o in locked:
+            item = o.item
+            if not item:
                 continue
-            size = Size.objects.filter(pk=size_id).first()
-            if not size:
+            if o.sales_invoice_id is not None:
+                # اتفوتر قبل كده (أو في طلب متزامن سبقنا) — نتجاهله عشان ميتكررش
                 continue
-            variant = ItemVariant.objects.filter(item=item, size=size.code).first()
-            if not variant:
-                continue
-            line = SalesInvoiceLine.objects.create(
-                invoice=invoice, variant=variant,
-                sale_unit='PIECE', quantity=Decimal(qty), unit_price=Decimal('0'))
-            line.recalc()                       # يحسب line_total من (سعر × كمية) بعد ملء السعر
-            line.save(update_fields=['line_total'])
-            added += 1
-        o.sales_invoice = invoice
-        o.save(update_fields=['sales_invoice'])
+            for size_id, qty in o._pieces_by_size().items():
+                if not qty:
+                    continue
+                size = Size.objects.filter(pk=size_id).first()
+                if not size:
+                    continue
+                variant = ItemVariant.objects.filter(item=item, size=size.code).first()
+                if not variant:
+                    continue
+                line = SalesInvoiceLine.objects.create(
+                    invoice=invoice, variant=variant,
+                    sale_unit='PIECE', quantity=Decimal(qty), unit_price=Decimal('0'))
+                line.recalc()                   # يحسب line_total من (سعر × كمية) بعد ملء السعر
+                line.save(update_fields=['line_total'])
+                added += 1
+            o.sales_invoice = invoice
+            o.save(update_fields=['sales_invoice'])
     invoice.recalc_totals()
     return added
