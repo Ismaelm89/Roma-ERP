@@ -113,6 +113,21 @@ class SalesInvoice(models.Model):
     grand_total = models.DecimalField('الإجمالي', max_digits=14, decimal_places=2,
                                        default=Decimal('0'))
 
+    # نوع البيع: آجل (على حساب العميل) أو نقدي (تحصيل فوري وقت الترحيل)
+    PAYMENT_TYPE_CHOICES = [
+        ('CREDIT', 'آجل (على الحساب)'),
+        ('CASH', 'نقدي (تحصيل فوري)'),
+    ]
+    payment_type = models.CharField('نوع البيع', max_length=10,
+                                    choices=PAYMENT_TYPE_CHOICES, default='CREDIT',
+                                    help_text='آجل = مستحق على حساب العميل. نقدي = بيتحصّل '
+                                              'بالكامل وقت الترحيل في الخزنة/البنك.')
+    cash_account = models.ForeignKey('core.CashAccount', null=True, blank=True,
+                                     on_delete=models.PROTECT, related_name='cash_sales_invoices',
+                                     verbose_name='الخزنة/البنك (للبيع النقدي)',
+                                     help_text='لو البيع نقدي، الفلوس بتدخل هنا. سيبه فاضي '
+                                               'عشان يستخدم حساب النقدية الافتراضي.')
+
     # Payment terms — open-ended weekly plan (no fixed number of weeks).
     INSTALLMENT_FREQ_CHOICES = [
         ('', 'بدون'),
@@ -365,6 +380,8 @@ class Receipt(models.Model):
     reference = models.CharField('المرجع', max_length=100, blank=True)
     notes = models.TextField('ملاحظات', blank=True)
     status = models.CharField('الحالة', max_length=10, choices=STATUS_CHOICES, default='DRAFT')
+    auto_generated = models.BooleanField('اتولّد تلقائياً', default=False, editable=False,
+                                         help_text='سند اتعمل تلقائياً من فاتورة بيع نقدي.')
     posted_at = models.DateTimeField(null=True, blank=True)
     journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
                                        on_delete=models.SET_NULL, related_name='+')

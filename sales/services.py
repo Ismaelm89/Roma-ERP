@@ -134,6 +134,17 @@ def post_sales_invoice(invoice, user=None):
     invoice.posted_by = user
     invoice.journal_entry = je
     invoice.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
+
+    # بيع نقدي → تحصيل فوري بالكامل: سند قبض تلقائي بيدخل الفلوس الخزنة/البنك ويقفل المستحق.
+    if getattr(invoice, 'payment_type', 'CREDIT') == 'CASH' and Decimal(invoice.grand_total) > 0:
+        from .models import Receipt, ReceiptAllocation
+        rec = Receipt.objects.create(
+            date=invoice.date, customer=invoice.customer, method='CASH',
+            cash_account=invoice.cash_account, amount=_q(invoice.grand_total),
+            reference=invoice.invoice_no, notes=f'تحصيل نقدي تلقائي — فاتورة {invoice.invoice_no}',
+            status='DRAFT', auto_generated=True, created_by=user)
+        ReceiptAllocation.objects.create(receipt=rec, invoice=invoice, amount=_q(invoice.grand_total))
+        post_receipt(rec, user=user)
     return je
 
 
@@ -143,6 +154,13 @@ def cancel_sales_invoice(invoice, user=None):
         raise PostingError(f'Only POSTED invoices can be cancelled (current: {invoice.status}).')
 
     today = timezone.now().date()
+
+    # لو كان بيع نقدي وله سند تحصيل تلقائي — نلغيه الأول عشان نعكس دخول الفلوس والـ AR.
+    from .models import Receipt
+    auto_recs = (Receipt.objects.filter(auto_generated=True, status='POSTED',
+                                        allocations__invoice=invoice).distinct())
+    for rec in auto_recs:
+        cancel_receipt(rec, user=user)
     for line in invoice.lines.select_related('item', 'variant').all():
         if line.quantity <= 0 or not line.variant_id:
             continue

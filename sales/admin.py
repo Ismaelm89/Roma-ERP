@@ -144,15 +144,16 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
     lock_field = 'status'
     lock_values = ('POSTED', 'CANCELLED')
     unlock_always = ('notes',)
-    list_display = ('invoice_no', 'date', 'customer', 'doc_discount_percent', 'grand_total',
+    list_display = ('invoice_no', 'date', 'customer', 'payment_type', 'grand_total',
                      'profit_col', 'paid_amount_col', 'balance_due_col', 'status', 'print_link')
-    list_filter = ('status', 'date')
+    list_filter = ('status', 'payment_type', 'date')
     search_fields = ('invoice_no', 'customer__code', 'customer__name_ar', 'notes')
     autocomplete_fields = ('customer',)
     inlines = [SalesInvoiceLineInline]
     date_hierarchy = 'date'
     actions = [action_post_invoices, action_cancel_invoices, action_print_copies]
-    fields = ('invoice_no', 'date', 'customer', 'notes',
+    fields = ('invoice_no', 'date', 'customer',
+              'payment_type', 'cash_account', 'notes',
               'doc_discount_percent', 'doc_discount_amount',
               'cash_payment_percent', 'installment_frequency',
               'subtotal', 'grand_total',
