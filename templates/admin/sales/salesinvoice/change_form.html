@@ -5,6 +5,12 @@
   {{ block.super }}
   {% if show_post_button or show_cancel_button or print_url %}
   <div class="submit-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 8px;">
+    {% if add_sizes_url %}
+      <a href="{{ add_sizes_url }}"
+         style="background: #0369a1; color: white; padding: 10px 18px; text-decoration: none; font-weight: 700; border-radius: 6px;">
+        ➕ أضف منتج بمقاسات متعددة
+      </a>
+    {% endif %}
     {% if add_from_orders_url %}
       <a href="{{ add_from_orders_url }}"
          style="background: #4338ca; color: white; padding: 10px 18px; text-decoration: none; font-weight: 700; border-radius: 6px;">

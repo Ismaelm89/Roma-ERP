@@ -205,6 +205,9 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
                 extra_context['add_from_orders_url'] = reverse(
                     'admin:sales_salesinvoice_add_from_orders', args=[obj.pk]
                 )
+                extra_context['add_sizes_url'] = reverse(
+                    'admin:sales_salesinvoice_add_sizes', args=[obj.pk]
+                )
             # "Create return" shortcut — only when invoice is posted
             if obj.status == 'POSTED':
                 extra_context['create_return_url'] = reverse(
@@ -222,8 +225,70 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
                 self.admin_site.admin_view(self.add_from_orders_view),
                 name='sales_salesinvoice_add_from_orders',
             ),
+            path(
+                '<int:invoice_id>/add-sizes/',
+                self.admin_site.admin_view(self.add_sizes_view),
+                name='sales_salesinvoice_add_sizes',
+            ),
         ]
         return custom + urls
+
+    def add_sizes_view(self, request, invoice_id):
+        """اختار منتج واملا كميات لكذا مقاس مرة واحدة → بند لكل مقاس فيه كمية."""
+        from decimal import Decimal
+        from django.shortcuts import get_object_or_404, render
+        from django.db import transaction
+        from inventory.models import Item, ItemVariant
+        from .models import SalesInvoiceLine
+
+        invoice = get_object_or_404(SalesInvoice, pk=invoice_id)
+        change_url = reverse('admin:sales_salesinvoice_change', args=[invoice.pk])
+        if invoice.status != 'DRAFT':
+            messages.error(request, 'لا يمكن إضافة بنود إلا لفاتورة مسودة.')
+            return HttpResponseRedirect(change_url)
+
+        if request.method == 'POST':
+            added = 0
+            with transaction.atomic():
+                for key, val in request.POST.items():
+                    if not key.startswith('qty_'):
+                        continue
+                    try:
+                        qty = Decimal(val or 0)
+                    except Exception:
+                        qty = Decimal('0')
+                    if qty <= 0:
+                        continue
+                    vid = key[4:]
+                    variant = ItemVariant.objects.filter(pk=vid).first()
+                    if not variant:
+                        continue
+                    line = SalesInvoiceLine.objects.create(
+                        invoice=invoice, variant=variant,
+                        sale_unit='PIECE', quantity=qty, unit_price=Decimal('0'))
+                    line.recalc()
+                    line.save(update_fields=['line_total'])
+                    added += 1
+                invoice.recalc_totals()
+            if added:
+                messages.success(request, f'تمت إضافة {added} بند (مقاس) للفاتورة {invoice.invoice_no}.')
+            else:
+                messages.warning(request, 'ماحطّتش أي كمية — مفيش بنود اتضافت.')
+            return HttpResponseRedirect(change_url)
+
+        # قائمة المنتجات اللي ليها مقاسات (للـ dropdown)
+        items = (Item.objects.filter(active=True, variants__isnull=False)
+                 .distinct().order_by('name_ar'))
+        ctx = {
+            **self.admin_site.each_context(request),
+            'title': f'أضف منتج بمقاسات متعددة → {invoice.invoice_no}',
+            'invoice': invoice,
+            'items': items,
+            'opts': self.model._meta,
+            'change_url': change_url,
+            'variants_url_base': '/sales/item/',   # + <id>/variants/
+        }
+        return render(request, 'admin/sales/salesinvoice/add_sizes.html', ctx)
 
     def add_from_orders_view(self, request, invoice_id):
         from django.shortcuts import get_object_or_404, render

@@ -490,6 +490,7 @@ def variants_for_item(request, pk):
                 'size': v.size,
                 'sku_code': v.sku_code,
                 'current_stock': str(v.current_stock),
+                'selling_price': str(v.selling_price or 0),
             }
             for v in variants
         ],
