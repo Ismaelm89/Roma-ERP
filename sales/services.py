@@ -443,6 +443,9 @@ def add_orders_to_invoice(invoice, orders, user=None):
         # نعيد جلب الأوامر مع قفل الصفوف داخل المعاملة عشان أي طلب متزامن يستنّى
         locked = list(ProductionOrder.objects.select_for_update()
                       .filter(pk__in=order_ids))
+        # بنجمّع الكمية لكل مقاس (variant) — لو نفس المنتج/المقاس اتنتج في أكتر من أمر
+        # بنحطّه في بند واحد بمجموع الكمية، بدل بند مكرر لكل أمر (كان بيبان زي التكرار).
+        agg = {}  # variant -> qty
         for o in locked:
             item = o.item
             if not item:
@@ -459,13 +462,20 @@ def add_orders_to_invoice(invoice, orders, user=None):
                 variant = ItemVariant.objects.filter(item=item, size=size.code).first()
                 if not variant:
                     continue
-                line = SalesInvoiceLine.objects.create(
-                    invoice=invoice, variant=variant,
-                    sale_unit='PIECE', quantity=Decimal(qty), unit_price=Decimal('0'))
-                line.recalc()                   # يحسب line_total من (سعر × كمية) بعد ملء السعر
-                line.save(update_fields=['line_total'])
-                added += 1
+                agg[variant] = agg.get(variant, Decimal('0')) + Decimal(qty)
             o.sales_invoice = invoice
             o.save(update_fields=['sales_invoice'])
+        # بند واحد لكل مقاس — ولو الفاتورة فيها نفس المقاس قبل كده بنزوّد كميته مش بند جديد
+        for variant, qty in agg.items():
+            line = invoice.lines.filter(variant=variant, sale_unit='PIECE').first()
+            if line:
+                line.quantity = Decimal(line.quantity or 0) + qty
+            else:
+                line = SalesInvoiceLine(invoice=invoice, variant=variant,
+                                        sale_unit='PIECE', quantity=qty, unit_price=Decimal('0'))
+            line.save()                         # بيملأ السعر تلقائياً من الوصفة لو 0
+            line.recalc()                       # يحسب line_total = سعر × كمية
+            line.save(update_fields=['line_total'])
+            added += 1
     invoice.recalc_totals()
     return added
