@@ -348,7 +348,27 @@ class SalesInvoiceAdmin(LockAfterPostMixin, admin.ModelAdmin):
         }
         return render(request, 'admin/sales/salesinvoice/add_from_orders.html', ctx)
 
+    def _add_lines_redirect(self, request, obj):
+        """لو المستخدم دَاس زرار «أضف منتج بمقاسات» أو «أضف من أوامر الإنتاج» —
+        الفاتورة اتحفظت خلاص (لو جديدة بقى ليها رقم)، نروح لشاشة الإضافة على طول."""
+        if '_go_add_sizes' in request.POST:
+            return HttpResponseRedirect(
+                reverse('admin:sales_salesinvoice_add_sizes', args=[obj.pk]))
+        if '_go_add_from_orders' in request.POST:
+            return HttpResponseRedirect(
+                reverse('admin:sales_salesinvoice_add_from_orders', args=[obj.pk]))
+        return None
+
+    def response_add(self, request, obj, post_url_continue=None):
+        r = self._add_lines_redirect(request, obj)
+        if r is not None:
+            return r
+        return super().response_add(request, obj, post_url_continue)
+
     def response_change(self, request, obj):
+        r = self._add_lines_redirect(request, obj)
+        if r is not None:
+            return r
         if '_post_invoice' in request.POST:
             try:
                 post_sales_invoice(obj, user=request.user)
