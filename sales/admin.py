@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
@@ -40,8 +41,28 @@ class CustomerAdmin(admin.ModelAdmin):
     balance_col.short_description = 'الرصيد الحالي'
 
 
+class SalesInvoiceLineInlineForm(forms.ModelForm):
+    """يخلي خانة «المقاس» (variant) ترسم الاختيار الحالي بس على السيرفر بدل ما ترسم
+    كل الـ 857 مقاس × كل صف — ده كان بيبطّئ فواتير كبيرة لدرجة الـ 502. الـ queryset
+    الكامل بيفضل للتحقق (validation)، وdomain_filters_v4.js بيملا باقي المقاسات AJAX."""
+    class Meta:
+        model = SalesInvoiceLine
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        vf = self.fields.get('variant')
+        if vf is not None:
+            choices = [('', '— اختار المقاس —')]
+            inst = self.instance
+            if inst is not None and inst.pk and inst.variant_id:
+                choices.append((inst.variant_id, str(inst.variant)))
+            vf.widget.choices = choices          # الرسم فقط — التحقق لسه على الـ queryset الكامل
+
+
 class SalesInvoiceLineInline(LockedInlineMixin, admin.TabularInline):
     model = SalesInvoiceLine
+    form = SalesInvoiceLineInlineForm
     extra = 1
     # Pick the product (by name), the size, the sale unit (piece/dozen/carton),
     # then the count; price auto-fills (piece price × pieces-per-unit). The size
@@ -50,6 +71,11 @@ class SalesInvoiceLineInline(LockedInlineMixin, admin.TabularInline):
               'after_discount_col', 'cost_col', 'profit_col')
     autocomplete_fields = ('item',)
     readonly_fields = ('line_total', 'after_discount_col', 'cost_col', 'profit_col')
+
+    def get_queryset(self, request):
+        # select_related عشان حساب التكلفة/الربح + str(variant) ما يعملش N+1
+        return super().get_queryset(request).select_related(
+            'variant', 'variant__item', 'item')
 
     def after_discount_col(self, obj):
         if not obj or not obj.pk:
