@@ -167,6 +167,14 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
     list_filter = ('active', 'product')
     search_fields = ('code', 'name_ar', 'name_en')
     autocomplete_fields = ('product',)
+
+    def get_search_results(self, request, queryset, search_term):
+        qs, use_distinct = super().get_search_results(request, queryset, search_term)
+        # في قوايم الاختيار (autocomplete) بتاعت الفواتير/أوامر الإنتاج نخفي المنتجات
+        # الموقوفة (غير النشطة) — عشان المكرر ما يظهرش. في شاشة الأصناف نفسها بيفضل ظاهر.
+        if request.path.endswith('/autocomplete/'):
+            qs = qs.filter(active=True)
+        return qs, use_distinct
     inlines = [ItemVariantInline]
     readonly_fields = ('code', 'image_preview', 'inherited_summary', 'sub_type_note')
     fieldsets = (
