@@ -162,7 +162,7 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
         js = ('inventory/image_live_preview.js',)
 
     list_display = ('image_thumb', 'code', 'product', 'name_ar', 'variants_count',
-                    'dozen_size', 'active')
+                    'dozen_size', 'active', 'history_link')
     list_display_links = ('code', 'name_ar')
     list_filter = ('active', 'product')
     search_fields = ('code', 'name_ar', 'name_en')
@@ -176,11 +176,12 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
             qs = qs.filter(active=True)
         return qs, use_distinct
     inlines = [ItemVariantInline]
-    readonly_fields = ('code', 'image_preview', 'inherited_summary', 'sub_type_note')
+    readonly_fields = ('code', 'image_preview', 'inherited_summary', 'sub_type_note',
+                       'history_button')
     fieldsets = (
         ('بيانات المنتج الفرعي', {
-            'fields': ('product', 'sub_type_note', 'inherited_summary', 'code', 'name_ar',
-                       'fabric_color', 'shorts_fabric_color', 'active'),
+            'fields': ('history_button', 'product', 'sub_type_note', 'inherited_summary',
+                       'code', 'name_ar', 'fabric_color', 'shorts_fabric_color', 'active'),
             'description': 'المنتج الفرعي = اسم بيعي + صورة + لون القماش. اختار «المنتج الرئيسي» '
                            'وهو هيجيب المقاسات والأسعار والوصفة (قماش/إكسسوارات/مصنعية) '
                            'تلقائياً — المقاسات بتظهر تحت كـ SKUs للعرض فقط. '
@@ -192,6 +193,21 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
             'description': 'الصورة بتظهر في تقارير المنتجات والمبيعات.',
         }),
     )
+
+    def history_button(self, obj):
+        if not obj or not obj.pk:
+            return format_html('<span style="color:#999;">احفظ الأول عشان تشوف التفاصيل.</span>')
+        url = reverse('inventory:product_history', args=[obj.pk])
+        return format_html(
+            '<a href="{}" target="_blank" style="background:#4338ca;color:#fff;padding:6px 14px;'
+            'border-radius:5px;text-decoration:none;font-weight:700;">📊 تفاصيل المنتج '
+            '(أوامر الإنتاج + المبيعات)</a>', url)
+    history_button.short_description = 'التفاصيل'
+
+    def history_link(self, obj):
+        url = reverse('inventory:product_history', args=[obj.pk])
+        return format_html('<a href="{}" target="_blank">📊 تفاصيل</a>', url)
+    history_link.short_description = 'التفاصيل'
 
     def inherited_summary(self, obj):
         """عرض مختصر لكل اللي بييجي من المنتج الرئيسي (للتوضيح، مش قابل للتعديل هنا)."""

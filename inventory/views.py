@@ -3,11 +3,45 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import F, Sum, DecimalField, ExpressionWrapper
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 
 from core.account_codes import SYSTEM_ACCOUNTS
 from core.models import Account, JournalLine
 from .models import Item, ItemVariant
+
+
+@login_required
+def product_history(request, item_id):
+    """تفاصيل منتج فرعي: المقاسات/الرصيد + أوامر الإنتاج + مبيعاته (فواتير + مرتجعات)."""
+    from manufacturing.models import ProductionOrder
+    from sales.models import SalesInvoiceLine, SalesReturnLine
+
+    item = get_object_or_404(Item.objects.select_related('product'), pk=item_id)
+    variants = list(item.variants.all().order_by('size'))
+    total_stock = sum((Decimal(v.current_stock or 0) for v in variants), Decimal('0'))
+    total_value = sum((Decimal(v.current_stock or 0) * Decimal(v.average_cost or 0)
+                       for v in variants), Decimal('0'))
+
+    orders = (ProductionOrder.objects.filter(item=item)
+              .select_related('customer').order_by('-date', '-id'))
+    total_produced = sum((int(o.total_pieces or 0) for o in orders), 0)
+
+    sales = (SalesInvoiceLine.objects.filter(variant__item=item)
+             .select_related('invoice', 'invoice__customer', 'variant')
+             .order_by('-invoice__date', '-invoice__id'))
+    sold_posted = sum((int(l.total_pieces or 0) for l in sales
+                       if l.invoice.status == 'POSTED'), 0)
+
+    returns = (SalesReturnLine.objects.filter(variant__item=item)
+               .select_related('return_doc', 'return_doc__customer', 'variant')
+               .order_by('-return_doc__date', '-return_doc__id'))
+
+    return render(request, 'inventory/product_history.html', {
+        'item': item, 'variants': variants,
+        'total_stock': total_stock, 'total_value': total_value,
+        'orders': orders, 'total_produced': total_produced,
+        'sales': sales, 'sold_posted': sold_posted, 'returns': returns,
+    })
 
 
 @login_required
