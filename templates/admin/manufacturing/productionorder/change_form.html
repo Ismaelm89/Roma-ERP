@@ -16,6 +16,34 @@
 {% block after_related_objects %}
 {{ block.super }}
 {% if original %}
+{% with fabric_lines=original.recipe_fabric_lines_planned %}
+{% if fabric_lines %}
+<div class="module" style="margin-top:18px;">
+    <h2>أقمشة الوصفة (بوحدة كل نوع)</h2>
+    <table style="border-collapse:collapse;width:100%;max-width:640px;background:#fff;font-size:13px;margin:10px 12px;">
+        <thead><tr style="background:#f1f5f9;border-bottom:2px solid #475569;">
+            <th style="padding:6px 10px;text-align:right;">نوع القماش</th>
+            <th style="padding:6px 10px;text-align:right;">اللون</th>
+            <th style="padding:6px 10px;">الكمية للأمر</th>
+            <th style="padding:6px 10px;">الوحدة</th>
+        </tr></thead>
+        <tbody>
+        {% for line in fabric_lines %}
+            <tr style="border-bottom:1px solid #e2e8f0;">
+                <td style="padding:6px 10px;font-weight:700;">{{ line.0.name_ar }}</td>
+                <td style="padding:6px 10px;">{% if line.1 %}{{ line.1.name_ar }}{% else %}—{% endif %}</td>
+                <td style="padding:6px 10px;text-align:center;">{{ line.2|money }}</td>
+                <td style="padding:6px 10px;text-align:center;color:#0f766e;font-weight:700;">{{ line.0.unit }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div style="padding:0 12px 10px;color:#64748b;font-size:12px;">
+        القماش ده بيتخصم من مخزون كل نوع/لون تلقائياً وقت «انتج» (بوحدة النوع — متر لقماش زي ايزيس).
+    </div>
+</div>
+{% endif %}
+{% endwith %}
 {% if original.main_product %}
 <div class="module" style="margin-top:18px;">
     <h2>المخطط من وصفة المنتج «{{ original.main_product.name_ar }}»</h2>

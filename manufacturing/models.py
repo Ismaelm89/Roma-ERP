@@ -267,14 +267,16 @@ class FabricBatch(models.Model):
                                related_name='batches', verbose_name='اللون الحالي',
                                help_text='اللون اللي القماش عليه دلوقتي (خام لو لسه ما اتصبّغش)')
     purchase_date = models.DateField('تاريخ الشراء')
-    purchase_qty_kg = models.DecimalField('الكمية المشتراة (كيلو)', max_digits=12, decimal_places=3)
-    purchase_unit_cost = models.DecimalField('سعر الكيلو من المورد', max_digits=12, decimal_places=4)
+    purchase_qty_kg = models.DecimalField('الكمية المشتراة (كيلو/متر حسب النوع)',
+                                          max_digits=12, decimal_places=3)
+    purchase_unit_cost = models.DecimalField('سعر الوحدة من المورد (كيلو/متر)',
+                                             max_digits=12, decimal_places=4)
     purchase_payment_method = models.CharField('طريقة السداد', max_length=10,
                                                  choices=PAYMENT_CHOICES, default='CREDIT')
 
     # Cached running totals — kept in sync by services. Derived from movements.
-    in_stock_qty_kg = models.DecimalField('الرصيد بالمخزن (كيلو)', max_digits=12, decimal_places=3,
-                                            default=Decimal('0'))
+    in_stock_qty_kg = models.DecimalField('الرصيد بالمخزن (كيلو/متر حسب النوع)',
+                                          max_digits=12, decimal_places=3, default=Decimal('0'))
 
     is_posted = models.BooleanField('مرحّلة محاسبياً', default=False, editable=False)
     purchase_journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
