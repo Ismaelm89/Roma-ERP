@@ -1079,7 +1079,23 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
             return self._load_recipe_and_redirect(request, obj)
         if '_save_and_produce' in request.POST:
             return self._produce_and_redirect(request, obj)
+        if '_uncomplete' in request.POST:
+            return self._uncomplete_and_redirect(request, obj)
         return super().response_change(request, obj)
+
+    def _uncomplete_and_redirect(self, request, obj):
+        if obj.status != 'COMPLETED':
+            self.message_user(request, f'{obj.order_no}: مش «مكتمل» عشان يتلغي.', level=messages.WARNING)
+        else:
+            try:
+                uncomplete_production_order(obj, user=request.user)
+                self.message_user(
+                    request,
+                    f'تم إلغاء إنتاج {obj.order_no} — رجع القماش والإكسسوارات، اتشال المنتج '
+                    f'التام، واتعكست القيود. الأمر رجع لمرحلة الخطة.', level=messages.SUCCESS)
+            except FabricPostingError as e:
+                self.message_user(request, f'فشل الإلغاء: {e}', level=messages.ERROR)
+        return redirect(reverse('admin:manufacturing_productionorder_change', args=[obj.pk]))
 
     def _load_recipe_and_redirect(self, request, obj):
         try:
