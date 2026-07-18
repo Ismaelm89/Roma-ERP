@@ -104,6 +104,10 @@ class FabricType(models.Model):
                                 help_text='يقبل عربي أو إنجليزي')
     name_en = models.CharField('Name (English)', max_length=200, blank=True)
     description = models.TextField('الوصف', blank=True)
+    UNIT_CHOICES = [('كيلو', 'كيلو'), ('متر', 'متر')]
+    unit = models.CharField('وحدة القياس', max_length=10, choices=UNIT_CHOICES, default='كيلو',
+                            help_text='الوحدة اللي بتشتري وتستهلك بيها القماش ده. '
+                                      'الأقمشة العادية بالكيلو، وقماش زي «ايزيس» بالمتر.')
     active = models.BooleanField('نشط', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -570,11 +574,15 @@ class ProductionOrder(models.Model):
                 total += qty * cpk
             return total.quantize(Decimal('0.01'))
         # مرحلة الخطة: قيمة متوقعة من الوصفة (بالهالك) × متوسط سعر خامة المنتج
+        planned = Decimal('0')
         ft = p.fabric_type if (p and p.fabric_type_id) else None
-        if not ft:
-            return Decimal('0')
-        return (self.recipe_actual_fabric_kg
-                * fabric_avg_cost(ft, self.fabric_color)).quantize(Decimal('0.01'))
+        if ft:
+            planned += self.recipe_actual_fabric_kg * fabric_avg_cost(ft, self.fabric_color)
+        # أقمشة الوصفة الإضافية (أعلام: كذا لون) — كل سطر بمتوسط سعر نوعه/لونه بالهالك
+        waste_f = Decimal('1') + (Decimal(p.waste_pct or 0) if p else Decimal('0')) / Decimal('100')
+        for f_type, f_color, need_before in self.recipe_fabric_lines_planned():
+            planned += Decimal(need_before) * waste_f * fabric_avg_cost(f_type, f_color)
+        return planned.quantize(Decimal('0.01'))
 
     @property
     def total_actual_accessory_cost(self):
@@ -668,6 +676,23 @@ class ProductionOrder(models.Model):
         waste = Decimal(p.waste_pct or 0) if p else Decimal('0')
         factor = Decimal('1') + waste / Decimal('100')
         return (self.recipe_planned_shorts_fabric_kg * factor).quantize(Decimal('0.001'))
+
+    def recipe_fabric_lines_planned(self):
+        """[(fabric_type, fabric_color, الكمية قبل الهالك)] من سطور «أقمشة الوصفة»
+        × كميات المقاسات — للمنتجات اللي فيها أكتر من قماش/لون (زي الأعلام)."""
+        from collections import OrderedDict
+        recipes = self._recipe_by_size()
+        agg = OrderedDict()  # (ft_id, color_id) -> [ft, color, qty]
+        for sid, qty in self._pieces_by_size().items():
+            r = recipes.get(sid)
+            if not r:
+                continue
+            for fl in r.fabrics.select_related('fabric_type', 'fabric_color').all():
+                key = (fl.fabric_type_id, fl.fabric_color_id)
+                if key not in agg:
+                    agg[key] = [fl.fabric_type, fl.fabric_color, Decimal('0')]
+                agg[key][2] += Decimal(fl.qty_per_piece or 0) * Decimal(qty)
+        return [(v[0], v[1], v[2].quantize(Decimal('0.001'))) for v in agg.values()]
 
     @property
     def recipe_labor_cost(self):
@@ -1446,6 +1471,30 @@ class ProductSizeAccessory(models.Model):
 
     def __str__(self):
         return f'{self.recipe.size}: {self.accessory.name_ar} × {self.qty_per_piece}'
+
+
+class ProductSizeFabric(models.Model):
+    """قماش إضافي في وصفة مقاس — بيسمح بأكتر من قماش/لون لنفس القطعة (زي الأعلام
+    اللي فيها كذا لون قماش). القماش الرئيسي بيفضل في fabric_qty_kg للهدوم؛ ده للحالات
+    اللي محتاجة عدة أقمشة/ألوان (بأي وحدة حسب نوع القماش — كيلو أو متر)."""
+    recipe = models.ForeignKey(ProductSizeRecipe, on_delete=models.CASCADE,
+                               related_name='fabrics', verbose_name='وصفة المقاس')
+    fabric_type = models.ForeignKey(FabricType, on_delete=models.PROTECT,
+                                    verbose_name='نوع القماش')
+    fabric_color = models.ForeignKey(FabricColor, on_delete=models.PROTECT,
+                                     null=True, blank=True, verbose_name='اللون')
+    qty_per_piece = models.DecimalField('الكمية للقطعة', max_digits=12, decimal_places=3,
+                                        default=Decimal('0'),
+                                        help_text='كمية القماش للقطعة الواحدة بوحدة النوع (كيلو/متر).')
+
+    class Meta:
+        verbose_name = 'قماش الوصفة'
+        verbose_name_plural = 'أقمشة الوصفة'
+        unique_together = [('recipe', 'fabric_type', 'fabric_color')]
+
+    def __str__(self):
+        c = f' ({self.fabric_color.name_ar})' if self.fabric_color_id else ''
+        return f'{self.recipe.size}: {self.fabric_type.name_ar}{c} × {self.qty_per_piece}'
 
 
 # ============================================================

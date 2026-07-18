@@ -683,9 +683,10 @@ def produce_production_order(order: ProductionOrder, user=None):
     if not p:
         raise FabricPostingError('الأمر مش مربوط بمنتج رئيسي له وصفة. اربط المنتج الفرعي '
                                  'بمنتج رئيسي معرّف له خامة ووصفة مقاسات الأول.')
-    if not p.fabric_type_id:
+    # القماش ممكن ييجي من خامة المنتج الرئيسي (هدوم) أو من «أقمشة الوصفة» (أعلام: كذا لون).
+    if not p.fabric_type_id and not order.recipe_fabric_lines_planned():
         raise FabricPostingError(f'المنتج «{p.name_ar}» مالوش نوع قماش/خامة محدّد — '
-                                 'حدّد الخامة على المنتج الرئيسي الأول.')
+                                 'حدّد الخامة على المنتج الرئيسي، أو ضيف «أقمشة الوصفة».')
     if not order.has_recipe:
         raise FabricPostingError(
             f'المنتج «{p.name_ar}» مالوش وصفة للمقاسات اللي في الأمر — '
@@ -694,7 +695,8 @@ def produce_production_order(order: ProductionOrder, user=None):
 
     top_need = order.recipe_actual_fabric_kg  # قماش الفانلة بالهالك
     shorts_need = order.recipe_actual_shorts_fabric_kg  # قماش الشورت بالهالك (للأطقم)
-    if top_need <= 0 and shorts_need <= 0:
+    fabric_lines = order.recipe_fabric_lines_planned()  # أقمشة إضافية (أعلام: كذا لون)
+    if top_need <= 0 and shorts_need <= 0 and not fabric_lines:
         raise FabricPostingError('كمية القماش المحسوبة من الوصفة = صفر — راجع وصفة المقاسات.')
 
     ft = p.fabric_type
@@ -706,7 +708,7 @@ def produce_production_order(order: ProductionOrder, user=None):
     # خصم القماش — للأطقم خصمين: الفانلة من لونها + الشورت من لونه (نفس النوع، لون مختلف).
     # لون القماش بييجي من المنتج الفرعي. لو مالوش لون، الخصم من كل الألوان (توافق قديم).
     total_fabric_value = Decimal('0')
-    if top_need > 0:
+    if top_need > 0 and ft is not None:
         total_fabric_value += _draw_fabric_part(
             order, ft, order.fabric_color, top_need, factor, user, 'تلقائي من خامة المنتج')
     if shorts_need > 0:
@@ -717,6 +719,15 @@ def produce_production_order(order: ProductionOrder, user=None):
                 'حدّد لون الشورت على المنتج الفرعي الأول.')
         total_fabric_value += _draw_fabric_part(
             order, ft, shorts_color, shorts_need, factor, user, 'قماش الشورت')
+
+    # أقمشة الوصفة الإضافية (زي الأعلام: كذا لون قماش). كل سطر بيتخصم من نوعه/لونه.
+    for f_type, f_color, need_before in fabric_lines:
+        if need_before <= 0:
+            continue
+        need = (Decimal(need_before) * factor).quantize(Decimal('0.001'))
+        clbl = f' ({f_color.name_ar})' if f_color else ''
+        total_fabric_value += _draw_fabric_part(
+            order, f_type, f_color, need, factor, user, f'قماش الوصفة{clbl}')
 
     total_fabric_value = total_fabric_value.quantize(Decimal('0.01'))
 

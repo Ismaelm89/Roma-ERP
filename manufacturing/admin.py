@@ -16,7 +16,7 @@ from .models import (
     ProductionOrder, ProductionSubModel, ProductionSize, FabricUsage,
     ProductionPrintingRow, ProductionOperationRow, ProductionQualityRow,
     ProductionIroningRow, Accessory, AccessoryUsage, AccessoryPurchase, Size,
-    ProductSizeRecipe, ProductSizeAccessory,
+    ProductSizeRecipe, ProductSizeAccessory, ProductSizeFabric,
     ManufacturingWagePayment, ManufacturingWageAdjustment,
     FabricStockTake, FabricStockTakeLine, AccessoryStockTake, AccessoryStockTakeLine,
 )
@@ -114,8 +114,8 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(FabricType)
 class FabricTypeAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name_ar', 'description', 'active')
-    list_filter = ('active',)
+    list_display = ('code', 'name_ar', 'unit', 'description', 'active')
+    list_filter = ('active', 'unit')
     search_fields = ('code', 'name_ar', 'description')
     readonly_fields = ('code', 'created_at')
 
@@ -1500,6 +1500,14 @@ class ProductSizeAccessoryInline(admin.TabularInline):
     autocomplete_fields = ('accessory',)
 
 
+class ProductSizeFabricInline(admin.TabularInline):
+    """أقمشة وصفة المقاس — بأكتر من قماش/لون (زي الأعلام). الكمية بوحدة نوع القماش (كيلو/متر)."""
+    model = ProductSizeFabric
+    extra = 0
+    fields = ('fabric_type', 'fabric_color', 'qty_per_piece')
+    autocomplete_fields = ('fabric_type', 'fabric_color')
+
+
 @admin.register(ProductSizeRecipe)
 class ProductSizeRecipeAdmin(StayOnPageMixin, admin.ModelAdmin):
     list_display = ('product', 'size', 'fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost',
@@ -1510,7 +1518,7 @@ class ProductSizeRecipeAdmin(StayOnPageMixin, admin.ModelAdmin):
     list_filter = ('product', 'size')
     search_fields = ('product__code', 'product__name_ar', 'size__code')
     autocomplete_fields = ('product', 'size')
-    inlines = [ProductSizeAccessoryInline]
+    inlines = [ProductSizeFabricInline, ProductSizeAccessoryInline]
     fields = ('product', 'size', 'fabric_qty_kg', 'shorts_fabric_qty_kg', 'labor_cost',
               'selling_price', 'reorder_level', 'notes')
 
