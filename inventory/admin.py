@@ -360,9 +360,33 @@ class FinishedGoodsPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, adm
     )
     inlines = [FinishedGoodsPurchaseLineInline]
     actions = ('action_post',)
+    change_form_template = 'admin/inventory/finishedgoodspurchaseinvoice/change_form.html'
 
     class Media:
         js = ('inventory/fgp_unit_relabel.js',)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        if '_save_and_post' in request.POST:
+            return self._post_and_redirect(request, obj)
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        if '_save_and_post' in request.POST:
+            return self._post_and_redirect(request, obj)
+        return super().response_change(request, obj)
+
+    def _post_and_redirect(self, request, obj):
+        from django.shortcuts import redirect
+        if obj.is_posted:
+            self.message_user(request, f'{obj.invoice_no}: مرحّلة من قبل.', level=messages.WARNING)
+        else:
+            try:
+                post_finished_goods_purchase_invoice(obj, user=request.user)
+                self.message_user(request, f'تم ترحيل الفاتورة {obj.invoice_no} — قيد محاسبي '
+                                  'واحد + زيادة أرصدة المنتجات.', level=messages.SUCCESS)
+            except FinishedGoodsPostingError as e:
+                self.message_user(request, f'فشل الترحيل: {e}', level=messages.ERROR)
+        return redirect(reverse('admin:inventory_finishedgoodspurchaseinvoice_change', args=[obj.pk]))
 
     def total_col(self, obj):
         return f'{fmt_money(obj.total)} ج'
