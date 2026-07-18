@@ -36,6 +36,17 @@
                 <td style="padding:6px 10px;text-align:center;color:#0f766e;font-weight:700;">{{ line.0.unit }}</td>
             </tr>
         {% endfor %}
+        {% for u in original.recipe_fabric_totals %}
+        <tr style="border-top:2px solid #475569;background:#f8fafc;font-weight:700;">
+            <td colspan="2" style="padding:6px 10px;">إجمالي القماش:</td>
+            <td style="padding:6px 10px;text-align:center;color:#b45309;">{{ u.1|money }}</td>
+            <td style="padding:6px 10px;text-align:center;color:#0f766e;">{{ u.0 }}</td>
+        </tr>
+        <tr style="background:#f8fafc;">
+            <td colspan="4" style="padding:2px 10px 6px;color:#64748b;font-weight:400;font-size:12px;">
+                (يعني <b>{{ u.2|money }} {{ u.0 }}</b> للقطعة الواحدة × {{ original.total_pieces|money:0 }} قطعة)</td>
+        </tr>
+        {% endfor %}
         </tbody>
     </table>
     <div style="padding:0 12px 10px;color:#64748b;font-size:12px;">

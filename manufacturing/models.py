@@ -696,6 +696,20 @@ class ProductionOrder(models.Model):
                 agg[key][2] += Decimal(fl.qty_per_piece or 0) * Decimal(qty)
         return [(v[0], v[1], v[2].quantize(Decimal('0.001'))) for v in agg.values()]
 
+    def recipe_fabric_totals(self):
+        """[(الوحدة, إجمالي القماش للأمر, إجمالي القماش للقطعة)] — مجموع كل سطور القماش
+        حسب وحدة النوع (متر/كيلو). للأعلام: مثلاً (متر، 13.5، 1.35)."""
+        from collections import OrderedDict
+        totals = OrderedDict()
+        for ft, color, qty in self.recipe_fabric_lines_planned():
+            totals[ft.unit] = totals.get(ft.unit, Decimal('0')) + Decimal(qty)
+        tp = Decimal(self.total_pieces or 0)
+        out = []
+        for u, t in totals.items():
+            per = (t / tp).quantize(Decimal('0.001')) if tp > 0 else Decimal('0')
+            out.append((u, t.quantize(Decimal('0.001')), per))
+        return out
+
     @property
     def recipe_labor_cost(self):
         """إجمالي المصنعية من الوصفة = Σ (مصنعية المقاس × عدد القطع).
