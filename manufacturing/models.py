@@ -1783,3 +1783,12 @@ class AccessoryStockTakeLine(models.Model):
         new_value = Decimal(self.counted_qty or 0) * a.last_purchase_cost
         old_value = Decimal(a.current_stock or 0) * Decimal(a.average_cost or 0)
         return (new_value - old_value).quantize(Decimal('0.01'))
+
+
+class UninvoicedProductionOrder(ProductionOrder):
+    """شاشة مستقلة (proxy) لأوامر الإنتاج اللي عليها عميل ولسه متفوترتش —
+    عشان تشتغل عليها كـ«قائمة شغل»: تعلّم وتعمل فاتورة، واللي يتفوتر يختفي منها."""
+    class Meta:
+        proxy = True
+        verbose_name = 'أمر لم يتم بيعه'
+        verbose_name_plural = 'أوامر لم يتم بيعها'

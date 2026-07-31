@@ -13,7 +13,7 @@ from .models import (
     VendorType, Supplier, FabricType, FabricColor,
     FabricBatch, FabricMovement, SupplierPayment,
     FabricPurchaseInvoice, AccessoryPurchaseInvoice,
-    ProductionOrder, ProductionSubModel, ProductionSize, FabricUsage,
+    ProductionOrder, UninvoicedProductionOrder, ProductionSubModel, ProductionSize, FabricUsage,
     ProductionPrintingRow, ProductionOperationRow, ProductionQualityRow,
     ProductionIroningRow, Accessory, AccessoryUsage, AccessoryPurchase, Size,
     ProductSizeRecipe, ProductSizeAccessory, ProductSizeFabric,
@@ -1223,6 +1223,21 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
             return redirect(reverse('admin:sales_salesinvoice_change', args=[inv.pk]))
 
         return render_page()
+
+
+@admin.register(UninvoicedProductionOrder)
+class UninvoicedProductionOrderAdmin(ProductionOrderAdmin):
+    """قائمة شغل مستقلة: أوامر إنتاج عليها عميل ولسه متفوترتش. علّم واعمل فاتورة —
+    اللي يتفوتر يختفي من هنا تلقائياً."""
+    list_filter = ('status', 'customer', 'item')
+
+    def get_queryset(self, request):
+        return (super().get_queryset(request)
+                .filter(customer__isnull=False, sales_invoice__isnull=True)
+                .exclude(status='CANCELLED'))
+
+    def has_add_permission(self, request):
+        return False
 
 
 # ============================================================

@@ -31,6 +31,7 @@ SIDEBAR = [
         ('sales', 'Receipt'),
         ('sales', 'SalesInvoice'),
         ('sales', 'SalesReturn'),
+        ('manufacturing', 'UninvoicedProductionOrder'),
     ]),
     ('الخزينة والمصروفات', [
         ('core', 'CashAccount'),
@@ -63,10 +64,7 @@ SIDEBAR = [
 ]
 
 # روابط مخصّصة تحت أقسام معيّنة: {section_title: [(label, url), ...]}
-# «أوامر لم يتم بيعها» = شاشة أوامر الإنتاج مفلترة (تقدر تعلّم وتعمل فاتورة بالأكشن).
-EXTRA_LINKS = {
-    'SALES': [('📋 أوامر لم يتم بيعها', '/admin/manufacturing/productionorder/?invoiced=no')],
-}
+EXTRA_LINKS = {}
 
 _original_get_app_list = None
 
