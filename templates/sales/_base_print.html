@@ -133,39 +133,37 @@ td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
 function loadScript(src){return new Promise((res,rej)=>{var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('فشل تحميل أداة الصورة'));};document.head.appendChild(s);});}
 async function shareWhatsApp(btn){
   var old = btn.textContent; btn.textContent='⏳ بيجهّز الصورة...'; btn.disabled=true;
+  // ستايل مؤقت: يثبّت عرض ورقة A4 (794px عند 96dpi) ويلغي ستايل الموبايل، عشان
+  // صورة الواتس تطلع بنفس مقاس/نسبة الورقة المطبوعة على أي موبايل. بيتشال بعد التصوير.
+  var sty = document.createElement('style');
+  sty.textContent =
+    'body{background:#fff!important;}'+
+    '.page{width:794px!important;max-width:794px!important;margin:0 auto!important;'+
+    'padding:34px 40px!important;box-shadow:none!important;border:none!important;}'+
+    'table{display:table!important;white-space:normal!important;overflow:visible!important;}'+
+    '.header-grid{grid-template-columns:1fr 1fr!important;}'+
+    '.meta-block{text-align:left!important;}';
   try{
     if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
     var el = document.querySelector('.page') || document.body;
-    // عرض ورقة A4 عند 96dpi = 794px — بنجبر الـ capture يرندر بيه (مش بعرض الموبايل)
-    // عشان صورة الواتس تطلع بنفس مقاس/نسبة الورقة اللي بتتطبع أو تتحفظ PDF.
-    var A4W = 794;
-    var canvas = await html2canvas(el, {
-      scale: 2, backgroundColor:'#ffffff', useCORS:true, scrollX:0, scrollY:0,
-      windowWidth: 900, windowHeight: 1400, width: A4W,
-      onclone: function(doc){
-        var st = doc.createElement('style');
-        st.textContent =
-          'body{background:#fff!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.5!important;}'+
-          '.toolbar,.no-print{display:none!important;}'+
-          '.page{width:'+A4W+'px!important;max-width:'+A4W+'px!important;margin:0!important;'+
-          'padding:38px 40px!important;box-shadow:none!important;border:none!important;border-radius:0!important;}'+
-          'table{display:table!important;white-space:normal!important;overflow:visible!important;}'+
-          'th,td{padding:8px 10px!important;}'+
-          '.header-grid{grid-template-columns:1fr 1fr!important;}'+
-          '.meta-block{text-align:left!important;}';
-        doc.head.appendChild(st);
-      }
-    });
+    document.head.appendChild(sty);
+    var canvas = await html2canvas(el, {scale: 2, backgroundColor:'#ffffff', useCORS:true,
+                                        scrollX:0, scrollY:0, windowWidth:820, windowHeight:1400});
+    sty.remove();
     var blob = await new Promise(function(r){ canvas.toBlob(r,'image/png'); });
     var name = (document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_') + '.png';
     var file = new File([blob], name, {type:'image/png'});
+    // جرّب المشاركة المباشرة؛ لو النظام رفضها (خلصت صلاحية اللمسة بعد التصوير) — نزّل الصورة.
+    var shared = false;
     if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title: document.title});
-    } else {
-      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
-      alert('جهازك مش بيدعم المشاركة المباشرة — الصورة اتحفظت، ابعتها من الصور.');
+      try{ await navigator.share({files:[file], title: document.title}); shared = true; }
+      catch(err){ if(err && err.name==='AbortError'){ shared = true; } }
     }
-  }catch(e){ if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
+    if(!shared){
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+      alert('الصورة اتحفظت في التنزيلات — افتح واتساب وابعتها من الصور/الملفات.');
+    }
+  }catch(e){ if(sty.parentNode){ sty.remove(); } if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
   finally{ btn.textContent=old; btn.disabled=false; }
 }
 </script>
