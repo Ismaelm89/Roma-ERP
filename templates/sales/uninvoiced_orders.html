@@ -1,0 +1,67 @@
+{% load money_filters %}
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أوامر لم يتم بيعها</title>
+<style>
+  body{font-family:Arial,Tahoma,sans-serif;background:#f1f5f9;margin:0;padding:18px;color:#1e293b;}
+  .wrap{max-width:1000px;margin:0 auto;}
+  h1{font-size:22px;margin:0 0 4px;}
+  .sub{color:#64748b;margin-bottom:16px;}
+  .cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;min-width:140px;}
+  .card .lbl{color:#64748b;font-size:12px;} .card .val{font-size:20px;font-weight:700;}
+  .cust{background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;overflow:hidden;}
+  .cust h2{font-size:15px;margin:0;padding:10px 14px;background:#2b3a55;color:#fff;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  .cust h2 .meta{font-weight:400;font-size:13px;opacity:.9;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:7px 10px;border-bottom:1px solid #eef2f7;text-align:right;}
+  th{background:#f8fafc;color:#475569;}
+  td.num,th.num{text-align:left;font-variant-numeric:tabular-nums;}
+  a{color:#2563eb;text-decoration:none;}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+  .COMPLETED{background:#dcfce7;color:#15803d;} .DRAFT{background:#fef3c7;color:#b45309;} .RELEASED{background:#e0e7ff;color:#3730a3;}
+  @media print{body{background:#fff;}.noprint{display:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="noprint" style="margin:0 0 10px;"><a href="/admin/">‹ رجوع للوحة</a> · <a href="#" onclick="window.print();return false;">🖨️ طباعة</a></p>
+  <h1>📋 أوامر لم يتم بيعها</h1>
+  <div class="sub">أوامر الإنتاج اللي عليها عميل ولسه متربطتش بفاتورة بيع.</div>
+
+  <div class="cards">
+    <div class="card"><div class="lbl">عدد الأوامر</div><div class="val" style="color:#1d4ed8;">{{ total_orders }}</div></div>
+    <div class="card"><div class="lbl">عدد العملاء</div><div class="val" style="color:#7c3aed;">{{ total_customers }}</div></div>
+    <div class="card"><div class="lbl">إجمالي القطع</div><div class="val" style="color:#b45309;">{{ total_pieces|money:0 }}</div></div>
+  </div>
+
+  {% for cust, g in groups.items %}
+  <div class="cust">
+    <h2>
+      <span><a href="/sales/customer/{{ cust.pk }}/ledger/" style="color:#fff;">{{ cust.name_ar }}</a></span>
+      <span class="meta">{{ g.orders|length }} أمر · {{ g.pieces|money:0 }} قطعة · منتَج {{ g.produced }} · خطة {{ g.plan }}</span>
+    </h2>
+    <table>
+      <thead><tr><th>الأمر</th><th>التاريخ</th><th>الصنف</th><th class="num">القطع</th><th>الحالة</th></tr></thead>
+      <tbody>
+        {% for o in g.orders %}
+        <tr>
+          <td><a href="/admin/manufacturing/productionorder/{{ o.pk }}/change/">{{ o.order_no }}</a></td>
+          <td>{{ o.date|date:"Y-m-d" }}</td>
+          <td>{{ o.item.name_ar|default:"—" }}</td>
+          <td class="num">{{ o.total_pieces|money:0 }}</td>
+          <td><span class="pill {{ o.status }}">{{ o.get_status_display }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% empty %}
+  <div class="cust"><div style="padding:16px;color:#94a3b8;">مفيش أوامر إنتاج عليها عميل ولسه متفوترتش — كله متفوتر ✅</div></div>
+  {% endfor %}
+</div>
+</body>
+</html>

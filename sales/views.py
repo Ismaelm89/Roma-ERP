@@ -474,6 +474,34 @@ def visual_sales_report(request):
 
 
 @login_required
+@login_required
+def uninvoiced_orders_report(request):
+    """أوامر الإنتاج اللي عليها عميل ولسه متفوترتش (مش مربوطة بفاتورة بيع)."""
+    from django.shortcuts import render
+    from manufacturing.models import ProductionOrder
+    from collections import OrderedDict
+    qs = (ProductionOrder.objects
+          .filter(customer__isnull=False, sales_invoice__isnull=True)
+          .exclude(status='CANCELLED')
+          .select_related('customer', 'item')
+          .order_by('customer__name_ar', 'order_no'))
+    groups = OrderedDict()
+    for o in qs:
+        g = groups.setdefault(o.customer, {'orders': [], 'pieces': 0, 'produced': 0, 'plan': 0})
+        g['orders'].append(o)
+        g['pieces'] += int(o.total_pieces or 0)
+        if o.status == 'COMPLETED':
+            g['produced'] += 1
+        else:
+            g['plan'] += 1
+    total_orders = qs.count()
+    total_pieces = sum(g['pieces'] for g in groups.values())
+    return render(request, 'sales/uninvoiced_orders.html', {
+        'groups': groups, 'total_orders': total_orders,
+        'total_pieces': total_pieces, 'total_customers': len(groups),
+    })
+
+
 def variants_for_item(request, pk):
     """Return the variants (sizes) belonging to a single item.
     Used by the admin JS to populate the variant dropdown per-line."""

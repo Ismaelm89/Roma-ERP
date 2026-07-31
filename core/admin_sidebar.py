@@ -62,6 +62,11 @@ SIDEBAR = [
     ]),
 ]
 
+# روابط تقارير مخصّصة تحت أقسام معيّنة: {section_title: [(label, url), ...]}
+EXTRA_LINKS = {
+    'SALES': [('📋 أوامر لم يتم بيعها', '/sales/uninvoiced-orders/')],
+}
+
 _original_get_app_list = None
 
 
@@ -85,6 +90,9 @@ def _ordered_get_app_list(self, request, app_label=None):
             if model is not None:
                 models.append(model)
                 used.add(key)
+        for label, url in EXTRA_LINKS.get(section_title, []):
+            models.append({'name': label, 'object_name': label, 'perms': {'view': True},
+                           'admin_url': url, 'add_url': None, 'view_only': True})
         if models:
             app_list.append({
                 'name': section_title,
