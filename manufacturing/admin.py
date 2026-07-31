@@ -754,6 +754,22 @@ class ProductionOrderForm(forms.ModelForm):
             self.fields['item'].required = True
 
 
+class InvoicedFilter(admin.SimpleListFilter):
+    """فلتر الفوترة على أوامر الإنتاج: لم يتم بيعها (عليها عميل ومش مربوطة بفاتورة) / تم بيعها."""
+    title = 'الفوترة'
+    parameter_name = 'invoiced'
+
+    def lookups(self, request, model_admin):
+        return [('no', 'لم يتم بيعها (عليها عميل)'), ('yes', 'تم بيعها')]
+
+    def queryset(self, request, qs):
+        if self.value() == 'no':
+            return qs.filter(customer__isnull=False, sales_invoice__isnull=True).exclude(status='CANCELLED')
+        if self.value() == 'yes':
+            return qs.filter(sales_invoice__isnull=False)
+        return qs
+
+
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin):
     form = ProductionOrderForm
@@ -762,7 +778,7 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
     unlock_always = ('notes',)
     list_display = ('order_no', 'date', 'item', 'customer', 'status_col',
                     'pieces_col', 'fabric_kg_col', 'fabric_value_col')
-    list_filter = ('status', 'date', 'item', 'customer')
+    list_filter = (InvoicedFilter, 'status', 'date', 'item', 'customer')
     search_fields = ('order_no', 'title', 'item__code', 'item__name_ar',
                      'customer__name_ar', 'notes')
     date_hierarchy = 'date'

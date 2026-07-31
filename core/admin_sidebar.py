@@ -62,9 +62,10 @@ SIDEBAR = [
     ]),
 ]
 
-# روابط تقارير مخصّصة تحت أقسام معيّنة: {section_title: [(label, url), ...]}
+# روابط مخصّصة تحت أقسام معيّنة: {section_title: [(label, url), ...]}
+# «أوامر لم يتم بيعها» = شاشة أوامر الإنتاج مفلترة (تقدر تعلّم وتعمل فاتورة بالأكشن).
 EXTRA_LINKS = {
-    'SALES': [('📋 أوامر لم يتم بيعها', '/sales/uninvoiced-orders/')],
+    'SALES': [('📋 أوامر لم يتم بيعها', '/admin/manufacturing/productionorder/?invoiced=no')],
 }
 
 _original_get_app_list = None

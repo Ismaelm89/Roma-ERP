@@ -17,5 +17,4 @@ urlpatterns = [
     path('item/<int:pk>/price/', views.item_default_price, name='item_price'),
     path('item/<int:pk>/variants/', views.variants_for_item, name='item_variants'),
     path('customer/<int:pk>/invoices/', views.invoices_for_customer, name='customer_invoices'),
-    path('uninvoiced-orders/', views.uninvoiced_orders_report, name='uninvoiced_orders'),
 ]
