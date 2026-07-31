@@ -1227,9 +1227,11 @@ class ProductionOrderAdmin(StayOnPageMixin, LockAfterPostMixin, admin.ModelAdmin
 
 @admin.register(UninvoicedProductionOrder)
 class UninvoicedProductionOrderAdmin(ProductionOrderAdmin):
-    """قائمة شغل مستقلة: أوامر إنتاج عليها عميل ولسه متفوترتش. علّم واعمل فاتورة —
-    اللي يتفوتر يختفي من هنا تلقائياً."""
+    """قائمة شغل مستقلة: أوامر إنتاج عليها عميل ولسه متفوترتش. علّم واعمل/اربط فاتورة —
+    اللي يتفوتر أو يتربط يختفي من هنا تلقائياً."""
     list_filter = ('status', 'customer', 'item')
+    # الأكشنز هنا: فوترة بس (اعمل فاتورة / ضيف لمسودة = action_make_invoice، وربط = الجديد)
+    actions = ('action_make_invoice', 'action_link_to_invoice')
 
     def get_queryset(self, request):
         return (super().get_queryset(request)
@@ -1238,6 +1240,57 @@ class UninvoicedProductionOrderAdmin(ProductionOrderAdmin):
 
     def has_add_permission(self, request):
         return False
+
+    @admin.action(description='🔗 اربط بفاتورة بيع موجودة (من غير إضافة بنود)')
+    def action_link_to_invoice(self, request, queryset):
+        from django.template.response import TemplateResponse
+        from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+        from sales.models import SalesInvoice
+        eligible = list(queryset.filter(status='COMPLETED', sales_invoice__isnull=True)
+                        .select_related('item', 'customer'))
+        skipped = [o.order_no for o in queryset if o not in eligible]
+        if skipped:
+            self.message_user(request, 'اتشالوا (مش مكتملين أو اتربطوا قبل كده): '
+                              + '، '.join(skipped), level=messages.WARNING)
+        if not eligible:
+            self.message_user(request, 'مفيش أوامر صالحة للربط.', level=messages.ERROR)
+            return None
+
+        def render(mismatch=False):
+            ctx = {
+                **self.admin_site.each_context(request),
+                'title': 'ربط الأوامر بفاتورة بيع موجودة',
+                'orders': eligible,
+                'invoices': (SalesInvoice.objects.exclude(status='CANCELLED')
+                             .select_related('customer').order_by('-invoice_no')),
+                'opts': self.model._meta,
+                'action_checkbox_name': ACTION_CHECKBOX_NAME,
+                'mismatch_warning': mismatch,
+            }
+            return TemplateResponse(request,
+                'admin/manufacturing/productionorder/link_invoice.html', ctx)
+
+        if not request.POST.get('apply'):
+            return render()
+        inv = (SalesInvoice.objects.exclude(status='CANCELLED')
+               .filter(pk=request.POST.get('invoice')).first())
+        if not inv:
+            self.message_user(request, 'اختار فاتورة صحيحة.', level=messages.ERROR)
+            return render()
+        confirmed = request.POST.get('confirm_mismatch') == 'on'
+        order_custs = {o.customer_id for o in eligible if o.customer_id}
+        if any(c != inv.customer_id for c in order_custs) and not confirmed:
+            self.message_user(request, '⚠️ عميل الأمر مختلف عن عميل الفاتورة — أكّد لو متأكد.',
+                              level=messages.WARNING)
+            return render(mismatch=True)
+        n = 0
+        for o in eligible:
+            o.sales_invoice = inv
+            o.save(update_fields=['sales_invoice'])
+            n += 1
+        self.message_user(request, f'اتربط {n} أمر بالفاتورة {inv.invoice_no} — اختفوا من القائمة.',
+                          level=messages.SUCCESS)
+        return None
 
 
 # ============================================================

@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div dir="rtl" style="max-width:820px;">
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="action" value="action_link_to_invoice">
+  <input type="hidden" name="apply" value="1">
+  {% for o in orders %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ o.pk }}">{% endfor %}
+
+  <h2>ربط الأوامر بفاتورة بيع موجودة ({{ orders|length }})</h2>
+  <p style="color:#64748b;">بيربط الأوامر دي بفاتورة عملتها قبل كده — <b>من غير ما يضيف بنود</b> (يعني الفاتورة أصلاً فيها المنتجات). بعد الربط الأوامر بتختفي من قائمة «أوامر لم يتم بيعها».</p>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+    <thead><tr style="background:#f5f5f5;">
+      <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">الأمر</th>
+      <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">الصنف</th>
+      <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">العميل</th>
+      <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">القطع</th>
+    </tr></thead>
+    <tbody>
+    {% for o in orders %}
+      <tr>
+        <td style="padding:6px;border-bottom:1px solid #eee;"><b>{{ o.order_no }}</b></td>
+        <td style="padding:6px;border-bottom:1px solid #eee;">{{ o.item.name_ar|default:"—" }}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;">{% if o.customer %}{{ o.customer.name_ar }}{% else %}<span style="color:#999;">—</span>{% endif %}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:left;">{{ o.total_pieces }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:14px;border-radius:6px;">
+    <p style="margin:0 0 8px;"><b>اختار الفاتورة اللي تربطهم بيها:</b></p>
+    <select name="invoice" style="min-width:340px;padding:6px;">
+      <option value="">— اختار فاتورة —</option>
+      {% for i in invoices %}
+        <option value="{{ i.pk }}">{{ i.invoice_no }} — {% if i.customer %}{{ i.customer.name_ar }}{% endif %} — {{ i.get_status_display }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% if mismatch_warning %}
+  <div style="background:#fef3c7;border:1px solid #fbbf24;padding:12px;border-radius:6px;margin-top:12px;color:#92400e;">
+    ⚠️ عميل واحد أو أكتر مختلف عن عميل الفاتورة. علّم «أنا متأكد» لو عايز تكمّل.
+  </div>
+  {% endif %}
+  <p style="margin:12px 0;"><label style="color:#b45309;">
+    <input type="checkbox" name="confirm_mismatch"> أنا متأكد وأكمل (حتى لو العميل مختلف)</label></p>
+
+  <div>
+    <button type="submit" class="default" style="padding:8px 18px;">🔗 اربط بالفاتورة</button>
+    <a href="../" style="margin-inline-start:12px;">إلغاء</a>
+  </div>
+</form>
+</div>
+{% endblock %}
