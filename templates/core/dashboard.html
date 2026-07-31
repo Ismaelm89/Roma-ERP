@@ -310,7 +310,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px
         {% for item in mod.items %}
             <li>
                 <a class="model-link" href="{{ item.list_url }}">{{ item.label }}</a>
-                <a class="add-link" href="{{ item.add_url }}">+ أضف</a>
+                {% if item.add_url %}<a class="add-link" href="{{ item.add_url }}">+ أضف</a>{% endif %}
             </li>
         {% endfor %}
         </ul>

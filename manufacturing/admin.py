@@ -1241,6 +1241,12 @@ class UninvoicedProductionOrderAdmin(ProductionOrderAdmin):
     def has_add_permission(self, request):
         return False
 
+    def get_actions(self, request):
+        # نشيل أكشن الحذف الافتراضي — الصفحة دي للفوترة بس، مش لحذف أوامر الإنتاج.
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
     @admin.action(description='🔗 اربط بفاتورة بيع موجودة (من غير إضافة بنود)')
     def action_link_to_invoice(self, request, queryset):
         from django.template.response import TemplateResponse

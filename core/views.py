@@ -77,6 +77,7 @@ ADMIN_MODULES = [
             ('سندات القبض', 'sales', 'receipt'),
             ('فواتير المبيعات', 'sales', 'salesinvoice'),
             ('مرتجعات المبيعات', 'sales', 'salesreturn'),
+            ('📋 أوامر لم يتم بيعها', 'manufacturing', 'uninvoicedproductionorder', False),
         ],
     },
     {
@@ -126,11 +127,13 @@ def _build_admin_modules():
     modules = []
     for mod in ADMIN_MODULES:
         items = []
-        for label, app, model in mod['items']:
+        for entry in mod['items']:
+            label, app, model = entry[0], entry[1], entry[2]
+            allow_add = entry[3] if len(entry) > 3 else True
             items.append({
                 'label': label,
                 'list_url': f'/admin/{app}/{model}/',
-                'add_url': f'/admin/{app}/{model}/add/',
+                'add_url': f'/admin/{app}/{model}/add/' if allow_add else None,
             })
         modules.append({'label': mod['label'], 'items': items})
     return modules
