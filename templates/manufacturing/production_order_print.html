@@ -149,7 +149,25 @@ async function shareWhatsApp(btn){
   try{
     if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
     var el=document.querySelector('.sheet')||document.body;
-    var canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,scrollY:0});
+    // عرض ورقة A4 طولي عند 96dpi = 794px — بنجبر الـ capture يرندر بيه (مش بعرض الموبايل)
+    // عشان صورة الواتس تطلع بنفس مقاس ورقة الطباعة، بنفس تقسيم الأعمدة (مش مكدّسة زي الموبايل).
+    var A4W=794;
+    var canvas=await html2canvas(el,{
+      scale:2, backgroundColor:'#ffffff', useCORS:true, scrollX:0, scrollY:0,
+      windowWidth:900, windowHeight:1600, width:A4W,
+      onclone:function(doc){
+        var st=doc.createElement('style');
+        st.textContent=
+          'html,body{background:#fff!important;padding:0!important;margin:0!important;font-size:12px!important;}'+
+          '.toolbar,.no-print{display:none!important;}'+
+          '.sheet{width:'+A4W+'px!important;max-width:'+A4W+'px!important;margin:0!important;padding:14px!important;border:none!important;overflow:visible!important;}'+
+          '.stages{flex-wrap:nowrap!important;}'+
+          '.stages-side{flex:0 0 34%!important;max-width:34%!important;}'+
+          '.consume{flex-wrap:nowrap!important;}'+
+          '.model-img{flex:0 0 30%!important;max-width:30%!important;}';
+        doc.head.appendChild(st);
+      }
+    });
     var blob=await new Promise(function(r){canvas.toBlob(r,'image/png');});
     var name=(document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_')+'.png';
     var file=new File([blob],name,{type:'image/png'});

@@ -136,7 +136,26 @@ async function shareWhatsApp(btn){
   try{
     if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
     var el = document.querySelector('.page') || document.body;
-    var canvas = await html2canvas(el, {scale: 2, backgroundColor:'#ffffff', useCORS:true, scrollY:0});
+    // عرض ورقة A4 عند 96dpi = 794px — بنجبر الـ capture يرندر بيه (مش بعرض الموبايل)
+    // عشان صورة الواتس تطلع بنفس مقاس/نسبة الورقة اللي بتتطبع أو تتحفظ PDF.
+    var A4W = 794;
+    var canvas = await html2canvas(el, {
+      scale: 2, backgroundColor:'#ffffff', useCORS:true, scrollX:0, scrollY:0,
+      windowWidth: 900, windowHeight: 1400, width: A4W,
+      onclone: function(doc){
+        var st = doc.createElement('style');
+        st.textContent =
+          'body{background:#fff!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.5!important;}'+
+          '.toolbar,.no-print{display:none!important;}'+
+          '.page{width:'+A4W+'px!important;max-width:'+A4W+'px!important;margin:0!important;'+
+          'padding:38px 40px!important;box-shadow:none!important;border:none!important;border-radius:0!important;}'+
+          'table{display:table!important;white-space:normal!important;overflow:visible!important;}'+
+          'th,td{padding:8px 10px!important;}'+
+          '.header-grid{grid-template-columns:1fr 1fr!important;}'+
+          '.meta-block{text-align:left!important;}';
+        doc.head.appendChild(st);
+      }
+    });
     var blob = await new Promise(function(r){ canvas.toBlob(r,'image/png'); });
     var name = (document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_') + '.png';
     var file = new File([blob], name, {type:'image/png'});
