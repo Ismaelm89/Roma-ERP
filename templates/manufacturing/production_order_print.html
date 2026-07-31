@@ -138,43 +138,71 @@ table.stg tfoot th { border-top:2px solid var(--ink); background:#f6f8fb; }
 <body>
 
 <div class="toolbar no-print">
-    <button type="button" class="btn" style="background:#25D366;color:#fff;border:0;" onclick="shareWhatsApp(this)">📱 شارك على واتساب</button>
+    <button type="button" class="btn" style="background:#128C7E;color:#fff;border:0;" onclick="sharePDF(this)">📄 شارك PDF (أوضح)</button>
+    <button type="button" class="btn" style="background:#25D366;color:#fff;border:0;" onclick="shareImage(this)">📷 شارك صورة</button>
     <a class="btn" href="javascript:window.print()">🖨️ طباعة / حفظ PDF</a>
     <a class="btn secondary" href="javascript:window.close()">إغلاق</a>
 </div>
 <script>
 function loadScript(src){return new Promise((res,rej)=>{var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('فشل تحميل أداة الصورة'));};document.head.appendChild(s);});}
-async function shareWhatsApp(btn){
-  var old=btn.textContent; btn.textContent='⏳ بيجهّز...'; btn.disabled=true;
-  // ستايل مؤقت: يثبّت عرض ورقة A4 طولي (794px) بنفس تقسيم الأعمدة (مش مكدّسة زي الموبايل)،
-  // عشان صورة الواتس تطلع بنفس مقاس ورقة الطباعة. بيتشال بعد التصوير.
-  var sty=document.createElement('style');
-  sty.textContent=
+// ستايل مؤقت: يثبّت عرض ورقة A4 طولي (794px) بنفس تقسيم الأعمدة (مش مكدّسة زي الموبايل).
+function _a4Style(){
+  var s=document.createElement('style');
+  s.textContent=
     'html,body{background:#fff!important;}'+
     '.sheet{width:794px!important;max-width:794px!important;margin:0 auto!important;padding:14px!important;border:none!important;overflow:visible!important;}'+
     '.stages{flex-wrap:nowrap!important;}.stages-side{flex:0 0 34%!important;max-width:34%!important;}'+
     '.consume{flex-wrap:nowrap!important;}.model-img{flex:0 0 30%!important;max-width:30%!important;}'+
     'table.grid,table.std,table.stg,.info{white-space:normal!important;}';
+  return s;
+}
+// تصوير بدقة عالية (scale ديناميكي: أوضح ما يمكن من غير ما الصورة تكبر أوي).
+async function _capture(){
+  if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
+  var el=document.querySelector('.sheet')||document.body;
+  var sty=_a4Style(); document.head.appendChild(sty);
   try{
-    if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
-    var el=document.querySelector('.sheet')||document.body;
-    document.head.appendChild(sty);
-    var canvas=await html2canvas(el,{scale:2, backgroundColor:'#ffffff', useCORS:true,
-                                     scrollX:0, scrollY:0, windowWidth:820, windowHeight:1600});
-    sty.remove();
+    var h=el.scrollHeight||1200;
+    var scale=Math.max(2, Math.min(3.5, 14000/h));
+    return await html2canvas(el,{scale:scale, backgroundColor:'#ffffff', useCORS:true,
+                                 scrollX:0, scrollY:0, windowWidth:820, windowHeight:Math.max(1600, h+120)});
+  } finally { sty.remove(); }
+}
+async function _shareOrSave(file, okMsg){
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title: document.title}); return; }
+    catch(err){ if(err && err.name==='AbortError'){ return; } }
+  }
+  var a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=file.name; a.click();
+  alert(okMsg);
+}
+async function shareImage(btn){
+  var old=btn.textContent; btn.textContent='⏳ بيجهّز الصورة...'; btn.disabled=true;
+  try{
+    var canvas=await _capture();
     var blob=await new Promise(function(r){canvas.toBlob(r,'image/png');});
     var name=(document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_')+'.png';
-    var file=new File([blob],name,{type:'image/png'});
-    var shared=false;
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      try{ await navigator.share({files:[file],title:document.title}); shared=true; }
-      catch(err){ if(err && err.name==='AbortError'){ shared=true; } }
-    }
-    if(!shared){
-      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
-      alert('الصورة اتحفظت في التنزيلات — افتح واتساب وابعتها من الصور/الملفات.');
-    }
-  }catch(e){ if(sty.parentNode){ sty.remove(); } if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
+    await _shareOrSave(new File([blob],name,{type:'image/png'}),
+                       'الصورة اتحفظت في التنزيلات — افتح واتساب وابعتها من الصور.');
+  }catch(e){ if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
+  finally{ btn.textContent=old; btn.disabled=false; }
+}
+async function sharePDF(btn){
+  var old=btn.textContent; btn.textContent='⏳ بيجهّز PDF...'; btn.disabled=true;
+  try{
+    if(!window.jspdf){ await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); }
+    var canvas=await _capture();
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF('p','mm','a4');
+    var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    var imgH=canvas.height*pw/canvas.width;
+    var img=canvas.toDataURL('image/jpeg',0.95);
+    var pages=Math.max(1, Math.ceil(imgH/ph - 0.001));
+    for(var i=0;i<pages;i++){ if(i>0){ pdf.addPage(); } pdf.addImage(img,'JPEG',0,-(i*ph),pw,imgH,undefined,'FAST'); }
+    var name=(document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_')+'.pdf';
+    await _shareOrSave(new File([pdf.output('blob')],name,{type:'application/pdf'}),
+                       'الـ PDF اتحفظ في التنزيلات — افتح واتساب وابعته كملف.');
+  }catch(e){ if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
   finally{ btn.textContent=old; btn.disabled=false; }
 }
 </script>

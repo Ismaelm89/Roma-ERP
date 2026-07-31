@@ -119,7 +119,8 @@ td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
 <div class="toolbar no-print">
 {% block toolbar %}
     <span style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button type="button" class="btn" style="background:#25D366;" onclick="shareWhatsApp(this)">📱 شارك على واتساب</button>
+      <button type="button" class="btn" style="background:#128C7E;" onclick="sharePDF(this)">📄 شارك PDF (أوضح)</button>
+      <button type="button" class="btn" style="background:#25D366;" onclick="shareImage(this)">📷 شارك صورة</button>
       <a class="btn" href="javascript:window.print()">🖨️ طباعة / حفظ PDF</a>
       <a class="btn secondary" href="javascript:window.close()">إغلاق</a>
     </span>
@@ -131,39 +132,67 @@ td.num, th.num { text-align: left; font-variant-numeric: tabular-nums; }
 
 <script>
 function loadScript(src){return new Promise((res,rej)=>{var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('فشل تحميل أداة الصورة'));};document.head.appendChild(s);});}
-async function shareWhatsApp(btn){
-  var old = btn.textContent; btn.textContent='⏳ بيجهّز الصورة...'; btn.disabled=true;
-  // ستايل مؤقت: يثبّت عرض ورقة A4 (794px عند 96dpi) ويلغي ستايل الموبايل، عشان
-  // صورة الواتس تطلع بنفس مقاس/نسبة الورقة المطبوعة على أي موبايل. بيتشال بعد التصوير.
-  var sty = document.createElement('style');
-  sty.textContent =
+// ستايل مؤقت: يثبّت عرض ورقة A4 (794px) ويلغي ستايل الموبايل، عشان الصورة/الـPDF
+// يطلعوا بنفس مقاس الورقة المطبوعة على أي موبايل. بيتشال بعد التصوير.
+function _a4Style(){
+  var s = document.createElement('style');
+  s.textContent =
     'body{background:#fff!important;}'+
     '.page{width:794px!important;max-width:794px!important;margin:0 auto!important;'+
     'padding:34px 40px!important;box-shadow:none!important;border:none!important;}'+
     'table{display:table!important;white-space:normal!important;overflow:visible!important;}'+
     '.header-grid{grid-template-columns:1fr 1fr!important;}'+
     '.meta-block{text-align:left!important;}';
+  return s;
+}
+// بيصوّر الصفحة بدقة عالية (scale ديناميكي: أوضح ما يمكن من غير ما الصورة تكبر أوي وتهنّج).
+async function _capture(){
+  if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
+  var el = document.querySelector('.page') || document.body;
+  var sty = _a4Style(); document.head.appendChild(sty);
   try{
-    if(!window.html2canvas){ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
-    var el = document.querySelector('.page') || document.body;
-    document.head.appendChild(sty);
-    var canvas = await html2canvas(el, {scale: 2, backgroundColor:'#ffffff', useCORS:true,
-                                        scrollX:0, scrollY:0, windowWidth:820, windowHeight:1400});
-    sty.remove();
+    var h = el.scrollHeight || 1200;
+    var scale = Math.max(2, Math.min(3.5, 14000 / h));   // كل ما الورقة أقصر، الدقة أعلى
+    return await html2canvas(el, {scale: scale, backgroundColor:'#ffffff', useCORS:true,
+                                  scrollX:0, scrollY:0, windowWidth:820, windowHeight:Math.max(1400, h+120)});
+  } finally { sty.remove(); }
+}
+// بيشارك الملف مباشرة؛ ولو النظام رفض (خلصت صلاحية اللمسة) بينزّله ويقول للمستخدم.
+async function _shareOrSave(file, okMsg){
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title: document.title}); return; }
+    catch(err){ if(err && err.name==='AbortError'){ return; } }
+  }
+  var a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=file.name; a.click();
+  alert(okMsg);
+}
+async function shareImage(btn){
+  var old = btn.textContent; btn.textContent='⏳ بيجهّز الصورة...'; btn.disabled=true;
+  try{
+    var canvas = await _capture();
     var blob = await new Promise(function(r){ canvas.toBlob(r,'image/png'); });
     var name = (document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_') + '.png';
-    var file = new File([blob], name, {type:'image/png'});
-    // جرّب المشاركة المباشرة؛ لو النظام رفضها (خلصت صلاحية اللمسة بعد التصوير) — نزّل الصورة.
-    var shared = false;
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      try{ await navigator.share({files:[file], title: document.title}); shared = true; }
-      catch(err){ if(err && err.name==='AbortError'){ shared = true; } }
-    }
-    if(!shared){
-      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
-      alert('الصورة اتحفظت في التنزيلات — افتح واتساب وابعتها من الصور/الملفات.');
-    }
-  }catch(e){ if(sty.parentNode){ sty.remove(); } if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
+    await _shareOrSave(new File([blob], name, {type:'image/png'}),
+                       'الصورة اتحفظت في التنزيلات — افتح واتساب وابعتها من الصور.');
+  }catch(e){ if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
+  finally{ btn.textContent=old; btn.disabled=false; }
+}
+async function sharePDF(btn){
+  var old = btn.textContent; btn.textContent='⏳ بيجهّز PDF...'; btn.disabled=true;
+  try{
+    if(!window.jspdf){ await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); }
+    var canvas = await _capture();
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF('p','mm','a4');
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var imgH = canvas.height * pw / canvas.width;              // ارتفاع الصورة بالملّي على عرض A4
+    var img = canvas.toDataURL('image/jpeg', 0.95);           // JPEG عالي الجودة = واضح وحجم أصغر
+    var pages = Math.max(1, Math.ceil(imgH/ph - 0.001));      // تقطيع على صفحات A4
+    for(var i=0;i<pages;i++){ if(i>0){ pdf.addPage(); } pdf.addImage(img,'JPEG',0,-(i*ph),pw,imgH,undefined,'FAST'); }
+    var name = (document.title||'roma').replace(/[^؀-ۿ\w\-]+/g,'_') + '.pdf';
+    await _shareOrSave(new File([pdf.output('blob')], name, {type:'application/pdf'}),
+                       'الـ PDF اتحفظ في التنزيلات — افتح واتساب وابعته كملف.');
+  }catch(e){ if(e && e.name!=='AbortError'){ alert('حصل خطأ: '+(e.message||e)); } }
   finally{ btn.textContent=old; btn.disabled=false; }
 }
 </script>
