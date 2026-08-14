@@ -329,11 +329,11 @@ class FabricBatch(models.Model):
 
     @property
     def cost_per_kg(self):
-        """تكلفة الكيلو الحالية — تنخفض لو ما فيش تصبيغ، وترتفع لو فيه تصبيغ أو فاقد."""
-        rem = self.remaining_qty_kg
-        if rem <= 0:
-            return Decimal('0')
-        return (self.total_value / rem).quantize(Decimal('0.0001'))
+        """تكلفة الكيلو = سعر شراء الكيلو (ثابت — مفيش تصبيغ في النموذج الحالي).
+        القماش بيتصرف للإنتاج بنفس التكلفة، فقيمة المتبقّي = المتبقّي × السعر.
+        (كانت بتقسم قيمة الشراء الكاملة على المتبقّي، فكانت بتضخّم قيمة أي دفعة
+        اتصرف منها جزء لحد قيمة شرائها الكاملة — bug في تقرير «القماش الموجود».)"""
+        return Decimal(self.purchase_unit_cost or 0).quantize(Decimal('0.0001'))
 
 
 def fabric_available_kg(fabric_type, color=None):
