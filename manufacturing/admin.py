@@ -23,6 +23,7 @@ from .models import (
 from .services import (
     post_fabric_purchase,
     post_fabric_purchase_invoice,
+    cancel_fabric_purchase_invoice,
     post_supplier_payment,
     post_accessory_purchase,
     post_accessory_purchase_invoice,
@@ -267,12 +268,12 @@ class FabricPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.Mode
     lock_field = 'is_posted'
     unlock_always = ('notes',)
     list_display = ('invoice_no', 'supplier', 'date', 'payment_method',
-                    'line_count_col', 'total_col', 'is_posted')
-    list_filter = ('is_posted', 'payment_method', 'date', 'supplier')
+                    'line_count_col', 'total_col', 'is_posted', 'is_cancelled')
+    list_filter = ('is_posted', 'is_cancelled', 'payment_method', 'date', 'supplier')
     search_fields = ('invoice_no', 'supplier_ref', 'supplier__name', 'notes')
     date_hierarchy = 'date'
     autocomplete_fields = ('supplier', 'cash_account')
-    readonly_fields = ('invoice_no', 'is_posted', 'journal_entry',
+    readonly_fields = ('invoice_no', 'is_posted', 'is_cancelled', 'journal_entry',
                        'total_display', 'created_at')
     fieldsets = (
         ('بيانات الفاتورة', {
@@ -283,11 +284,11 @@ class FabricPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.Mode
             'description': 'آجل: هيتسجّل على المورد. كاش/بنك: اختار الخزينة/البنك/المحفظة '
                            '(لو سبتها فاضية هيتحسب على النقدية/البنك العام).',
         }),
-        ('الإجمالي', {'fields': ('total_display', 'is_posted', 'journal_entry')}),
+        ('الإجمالي', {'fields': ('total_display', 'is_posted', 'is_cancelled', 'journal_entry')}),
         ('ملاحظات', {'fields': ('notes', 'created_at')}),
     )
     inlines = [FabricBatchLineInline]
-    actions = ('action_post',)
+    actions = ('action_post', 'action_cancel')
     change_form_template = 'admin/manufacturing/fabricpurchaseinvoice/change_form.html'
 
     def line_count_col(self, obj):
@@ -341,6 +342,18 @@ class FabricPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.Mode
         if ok:
             self.message_user(request, f'تم ترحيل {ok} فاتورة.', level=messages.SUCCESS)
 
+    @admin.action(description='إلغاء المختار (عكس المخزون + عكس القيد)')
+    def action_cancel(self, request, queryset):
+        ok = 0
+        for inv in queryset:
+            try:
+                cancel_fabric_purchase_invoice(inv, user=request.user)
+                ok += 1
+            except FabricPostingError as e:
+                self.message_user(request, f'{inv.invoice_no}: {e}', level=messages.ERROR)
+        if ok:
+            self.message_user(request, f'تم إلغاء {ok} فاتورة.', level=messages.SUCCESS)
+
     def response_add(self, request, obj, post_url_continue=None):
         if '_save_and_post' in request.POST:
             return self._post_and_redirect(request, obj)
@@ -349,6 +362,8 @@ class FabricPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.Mode
     def response_change(self, request, obj):
         if '_save_and_post' in request.POST:
             return self._post_and_redirect(request, obj)
+        if '_cancel_invoice' in request.POST:
+            return self._cancel_and_redirect(request, obj)
         return super().response_change(request, obj)
 
     def _post_and_redirect(self, request, obj):
@@ -364,6 +379,17 @@ class FabricPurchaseInvoiceAdmin(StayOnPageMixin, LockAfterPostMixin, admin.Mode
                     level=messages.SUCCESS)
             except FabricPostingError as e:
                 self.message_user(request, f'فشل الترحيل: {e}', level=messages.ERROR)
+        return redirect(reverse('admin:manufacturing_fabricpurchaseinvoice_change', args=[obj.pk]))
+
+    def _cancel_and_redirect(self, request, obj):
+        try:
+            cancel_fabric_purchase_invoice(obj, user=request.user)
+            self.message_user(
+                request,
+                f'تم إلغاء الفاتورة {obj.invoice_no} — رجّع رصيد القماش وعكس القيد المحاسبي.',
+                level=messages.SUCCESS)
+        except FabricPostingError as e:
+            self.message_user(request, f'فشل الإلغاء: {e}', level=messages.ERROR)
         return redirect(reverse('admin:manufacturing_fabricpurchaseinvoice_change', args=[obj.pk]))
 
 

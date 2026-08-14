@@ -193,6 +193,7 @@ class FabricPurchaseInvoice(models.Model):
                                      verbose_name='مدفوع من (لو كاش/بنك)',
                                      help_text='اختار الخزينة/البنك/المحفظة لو السداد مش آجل')
     is_posted = models.BooleanField('مرحّلة محاسبياً', default=False, editable=False)
+    is_cancelled = models.BooleanField('ملغاة', default=False, editable=False)
     journal_entry = models.ForeignKey('core.JournalEntry', null=True, blank=True,
                                       on_delete=models.SET_NULL, related_name='+', editable=False)
     notes = models.TextField('ملاحظات', blank=True)

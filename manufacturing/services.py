@@ -152,6 +152,8 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
     """
     if invoice.is_posted:
         raise FabricPostingError(f'الفاتورة {invoice.invoice_no} مرحّلة من قبل.')
+    if getattr(invoice, 'is_cancelled', False):
+        raise FabricPostingError(f'الفاتورة {invoice.invoice_no} ملغاة — مينفعش تترحّل.')
     lines = list(invoice.lines.select_related('fabric_type', 'color').all())
     if not lines:
         raise FabricPostingError('أضف بند واحد على الأقل قبل الترحيل.')
@@ -207,6 +209,58 @@ def post_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
     invoice.journal_entry = je
     invoice.save(update_fields=['is_posted', 'journal_entry'])
     return je
+
+
+@transaction.atomic
+def cancel_fabric_purchase_invoice(invoice: FabricPurchaseInvoice, user=None):
+    """إلغاء فاتورة شراء قماش مرحّلة:
+        - عكس المخزون: يشيل رصيد كل دفعة (حركة ADJUST_OUT ويصفّر in_stock_qty_kg)
+        - عكس القيد: قيد عكسي (DR/CR مقلوبين) = يرجّع مديونية المورد / يقفل مخزون القماش
+    بيرفض لو أي قماش من دفعاتها اتصرف في الإنتاج (رصيد الدفعة أقل من المشترى)،
+    عشان الإلغاء ميعملش رصيد سالب."""
+    if getattr(invoice, 'is_cancelled', False):
+        raise FabricPostingError(f'الفاتورة {invoice.invoice_no} ملغاة من قبل.')
+    if not invoice.is_posted:
+        raise FabricPostingError(f'الفاتورة {invoice.invoice_no} مش مرحّلة — مفيش حاجة تتلغي.')
+
+    lines = list(invoice.lines.select_for_update().select_related('fabric_type', 'color').all())
+    for b in lines:
+        consumed = Decimal(b.purchase_qty_kg or 0) - Decimal(b.in_stock_qty_kg or 0)
+        if consumed > Decimal('0.001'):
+            col = f'/{b.color.name_ar}' if b.color_id else ''
+            raise FabricPostingError(
+                f'الدفعة {b.batch_no} ({b.fabric_type.name_ar}{col}): اتصرف منها '
+                f'{consumed} — مينفعش تلغي فاتورة قماشها اتستخدم في الإنتاج.')
+
+    today = timezone.now().date()
+    for b in lines:
+        qty = Decimal(b.in_stock_qty_kg or 0)
+        if qty > 0:
+            FabricMovement.objects.create(
+                batch=b, date=today, movement_type='ADJUST_OUT',
+                quantity_kg=qty, cost_per_kg_snapshot=b.purchase_unit_cost,
+                document_type='FabricPurchaseInvoice.Cancel', document_id=invoice.id,
+                notes=f'إلغاء فاتورة شراء {invoice.invoice_no}', created_by=user)
+            b.in_stock_qty_kg = Decimal('0')
+            b.save(update_fields=['in_stock_qty_kg'])
+
+    orig = invoice.journal_entry
+    rev = JournalEntry.objects.create(
+        date=today, reference=f'CANCEL-{invoice.invoice_no}',
+        description=f'إلغاء فاتورة شراء قماش {invoice.invoice_no}',
+        status='POSTED', source_doc_type='FabricPurchaseInvoice.Cancel',
+        source_doc_id=invoice.id, created_by=user)
+    if orig:
+        for l in orig.lines.all():
+            JournalLine.objects.create(
+                entry=rev, account=l.account, debit=l.credit, credit=l.debit,
+                description=f'إلغاء — {l.description}',
+                supplier=l.supplier, variant=getattr(l, 'variant', None))
+    rev.recalc_totals()
+
+    invoice.is_cancelled = True
+    invoice.save(update_fields=['is_cancelled'])
+    return rev
 
 
 # ============================================================
