@@ -165,7 +165,12 @@ def main():
             print(f'وصلت رسالة من {uid} (chat {chat}): {text[:60]}')
             if uid not in allowed:
                 print(f'  ← مرفوض: {uid} مش في {sorted(allowed)}')
-                send(token, chat, 'مش مصرّحلك تستخدم البوت ده.')
+                # بنقوله رقمه عشان يبعته لصاحب النظام ويضيفه — من غير ما يحتاج
+                # يدوّر عليه في بوت تاني.
+                send(token, chat,
+                     'لسه مش مصرّحلك تستخدم البوت ده.\n\n'
+                     f'رقمك هو: {uid}\n\n'
+                     'ابعت الرقم ده لصاحب النظام عشان يضيفك.')
                 continue
             if text in ('/start', '/help'):
                 send(token, chat, HELP)
