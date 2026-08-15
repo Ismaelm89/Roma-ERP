@@ -178,6 +178,83 @@ def invoice_details(invoice_no):
     return '\n'.join(out)
 
 
+def list_production_orders(status='', item='', customer='', invoiced='', limit=15):
+    """أوامر الإنتاج — فلترة بالحالة/الصنف/العميل، أو اللي لسه متفوترتش."""
+    from manufacturing.models import ProductionOrder
+    qs = ProductionOrder.objects.select_related('item', 'customer', 'sales_invoice') \
+                                .order_by('-date', '-id')
+    if status:
+        s = status.upper()
+        aliases = {'خطة': 'DRAFT', 'مسودة': 'DRAFT', 'تم': 'COMPLETED',
+                   'مكتمل': 'COMPLETED', 'ملغي': 'CANCELLED'}
+        qs = qs.filter(status=aliases.get(status, s))
+    if item:
+        qs = qs.filter(item=_item(item))
+    if customer:
+        qs = qs.filter(customer=_customer(customer))
+    if invoiced == 'no':
+        qs = qs.filter(sales_invoice__isnull=True)
+    elif invoiced == 'yes':
+        qs = qs.filter(sales_invoice__isnull=False)
+    rows = []
+    for po in qs[:limit]:
+        rows.append('%s | %s | %s | %s | %s قطعة | عميل: %s | فاتورة: %s' % (
+            po.order_no, po.date, (po.item.name_ar if po.item_id else '—')[:24],
+            po.get_status_display(), po.total_pieces,
+            po.customer.name_ar if po.customer_id else '—',
+            po.sales_invoice.invoice_no if po.sales_invoice_id else '—'))
+    return '\n'.join(rows) or 'مفيش أوامر إنتاج بالشروط دي.'
+
+
+def production_order_details(order_no):
+    from manufacturing.models import ProductionOrder
+    po = ProductionOrder.objects.get(order_no=order_no)
+    out = ['%s | %s | %s | %s' % (po.order_no, po.date,
+                                  po.item.name_ar if po.item_id else '—',
+                                  po.get_status_display()),
+           'العميل: %s | الفاتورة: %s | إجمالي القطع: %s' % (
+               po.customer.name_ar if po.customer_id else '—',
+               po.sales_invoice.invoice_no if po.sales_invoice_id else '—',
+               po.total_pieces),
+           'المقاسات:']
+    for ps in po.sizes.select_related('size').all():
+        out.append('  %s × %s' % (ps.size.code, ps.quantity))
+    usages = po.fabric_usages.select_related('fabric_type', 'fabric_color').all()
+    if usages:
+        out.append('القماش:')
+        for u in usages:
+            out.append('  %s %s × %s' % (
+                u.fabric_type.name_ar,
+                u.fabric_color.name_ar if u.fabric_color_id else '',
+                u.actual_qty_kg or u.planned_qty_kg))
+    return '\n'.join(out)
+
+
+def search_suppliers(query='', limit=15):
+    from manufacturing.models import Supplier
+    qs = Supplier.objects.all()
+    if query:
+        qs = qs.filter(name__icontains=query)
+    rows = ['%s | %s | %s | رصيد %s' % (
+        s.code, s.name, s.vendor_type.name_ar if s.vendor_type_id else '—',
+        money(s.current_balance)) for s in qs[:limit]]
+    return '\n'.join(rows) or 'مفيش نتايج.'
+
+
+def list_receipts(customer='', limit=15):
+    """آخر إيصالات القبض (كلها أو لعميل معيّن)."""
+    from sales.models import Receipt
+    qs = Receipt.objects.select_related('customer', 'cash_account') \
+                        .order_by('-date', '-id')
+    if customer:
+        qs = qs.filter(customer=_customer(customer))
+    rows = ['%s | %s | %s | %s | %s' % (
+        r.receipt_no, r.date, r.customer.name_ar if r.customer_id else '—',
+        money(r.amount), r.cash_account.name if r.cash_account_id else '—')
+        for r in qs[:limit]]
+    return '\n'.join(rows) or 'مفيش إيصالات.'
+
+
 def stock_report():
     from decimal import Decimal as D
     from manufacturing.models import FabricBatch, Accessory
@@ -507,6 +584,18 @@ TOOLS = [
     _t('list_invoices', 'قايمة فواتير البيع (فلترة بالحالة DRAFT/POSTED أو بالعميل).',
        {'status': _STR, 'customer': _STR, 'limit': {'type': 'integer'}}),
     _t('invoice_details', 'تفاصيل فاتورة ببنودها.', {'invoice_no': _STR}, ['invoice_no']),
+    _t('list_production_orders', 'أوامر الإنتاج — فلترة بالحالة (DRAFT خطة / '
+       'COMPLETED تم الإنتاج) أو الصنف أو العميل، و invoiced=no للأوامر اللي '
+       'لسه متفوترتش.',
+       {'status': _STR, 'item': _STR, 'customer': _STR,
+        'invoiced': {'type': 'string', 'enum': ['yes', 'no']},
+        'limit': {'type': 'integer'}}),
+    _t('production_order_details', 'تفاصيل أمر إنتاج: المقاسات والقماش والحالة.',
+       {'order_no': _STR}, ['order_no']),
+    _t('search_suppliers', 'بحث في الموردين بالاسم + أرصدتهم.',
+       {'query': _STR, 'limit': {'type': 'integer'}}),
+    _t('list_receipts', 'آخر إيصالات القبض (كلها أو لعميل معيّن).',
+       {'customer': _STR, 'limit': {'type': 'integer'}}),
     _t('stock_report', 'قيمة المخزون: قماش + إكسسوارات + منتج تام (تكلفة وبيع).', {}),
     _t('balances_report', 'أرصدة العملاء أو الموردين.',
        {'kind': {'type': 'string', 'enum': ['customers', 'suppliers']},
@@ -562,6 +651,10 @@ HANDLERS = {
     'item_stock': item_stock,
     'list_invoices': list_invoices,
     'invoice_details': invoice_details,
+    'list_production_orders': list_production_orders,
+    'production_order_details': production_order_details,
+    'search_suppliers': search_suppliers,
+    'list_receipts': list_receipts,
     'stock_report': stock_report,
     'balances_report': balances_report,
     'create_sales_invoice': create_sales_invoice,
@@ -584,7 +677,8 @@ HANDLERS = {
 READ_ONLY = {
     'search_customers', 'customer_details', 'search_items', 'item_stock',
     'list_invoices', 'invoice_details', 'stock_report', 'balances_report',
-    'check_invoice_stock',
+    'check_invoice_stock', 'list_production_orders', 'production_order_details',
+    'search_suppliers', 'list_receipts',
 }
 
 
