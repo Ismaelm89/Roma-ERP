@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -52,6 +53,20 @@ def send(token, chat, text):
         except Exception as e:
             print('send failed:', e, file=sys.stderr)
             return
+
+
+def keep_typing(token, chat, stop):
+    """بيفضل يبعت «بيكتب...» كل 4 ثواني لحد ما الرد يجهز.
+
+    مؤشر تليجرام بيختفي بعد ~5 ثواني، والمهمة ممكن تاخد دقيقة أو أكتر —
+    من غير ده المستخدم بيفتكر إن البوت مردش.
+    """
+    while not stop.wait(4):
+        try:
+            api(token, 'sendChatAction', {'chat_id': chat, 'action': 'typing'},
+                timeout=10)
+        except Exception:
+            pass
 
 
 def load_session():
@@ -144,11 +159,13 @@ def main():
                 send(token, chat, 'تمام، بدأنا من أول وجديد.')
                 continue
 
+            stop = threading.Event()
+            threading.Thread(target=keep_typing, args=(token, chat, stop),
+                             daemon=True).start()
             try:
-                api(token, 'sendChatAction', {'chat_id': chat, 'action': 'typing'})
-            except Exception:
-                pass
-            reply, sid = run_claude(text)
+                reply, sid = run_claude(text)
+            finally:
+                stop.set()
             if sid:
                 save_session(sid)
             send(token, chat, reply)
