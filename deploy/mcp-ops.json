@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "roma-ops": {
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f", "/opt/roma-erp/docker-compose.yml",
+        "exec", "-T", "web",
+        "python", "manage.py", "mcp_ops"
+      ]
+    }
+  }
+}
