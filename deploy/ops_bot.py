@@ -162,7 +162,9 @@ def main():
                 continue
             chat = msg['chat']['id']
             uid = (msg.get('from') or {}).get('id')
+            print(f'وصلت رسالة من {uid} (chat {chat}): {text[:60]}')
             if uid not in allowed:
+                print(f'  ← مرفوض: {uid} مش في {sorted(allowed)}')
                 send(token, chat, 'مش مصرّحلك تستخدم البوت ده.')
                 continue
             if text in ('/start', '/help'):
@@ -175,10 +177,12 @@ def main():
             stop = threading.Event()
             threading.Thread(target=keep_typing, args=(token, chat, stop),
                              daemon=True).start()
+            t0 = time.time()
             try:
                 reply, sid = run_claude(chat, text)
             finally:
                 stop.set()
+            print(f'  ← رد بعد {time.time() - t0:.0f} ثانية ({len(reply)} حرف)')
             if sid:
                 set_session(chat, sid)
             send(token, chat, reply)
