@@ -613,7 +613,7 @@ def create_sub_product(main_product, name, fabric_color='', shorts_color=''):
 def set_prices(main_product, prices):
     """تعديل سعر البيع لمقاسات منتج رئيسي. prices = {"XL": 95, "M": 90}"""
     from inventory.models import Product
-    from inventory.services import sync_variants_from_recipe
+    from inventory.models import sync_variants_from_recipe
     p = Product.objects.filter(code__iexact=main_product).first() \
         or Product.objects.filter(name_ar__icontains=main_product).first()
     if not p:
@@ -638,7 +638,7 @@ def set_recipe_size(main_product, size, fabric_qty=None, shorts_fabric_qty=None,
                     labor_cost=None, selling_price=None, reorder_level=None):
     """تعديل وصفة مقاس (قماش/مصنعية/سعر/حد الطلب) — اللي متبعتوش مبيتغيّرش."""
     from inventory.models import Product
-    from inventory.services import sync_variants_from_recipe
+    from inventory.models import sync_variants_from_recipe
     p = Product.objects.filter(code__iexact=main_product).first() \
         or Product.objects.filter(name_ar__icontains=main_product).first()
     if not p:
