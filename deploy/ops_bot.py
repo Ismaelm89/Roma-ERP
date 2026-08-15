@@ -98,7 +98,7 @@ def run_claude(chat, prompt):
            '--allowedTools', ALLOWED,
            '--disallowedTools', *DISALLOWED,
            '--append-system-prompt', SYSTEM,
-           '--dangerously-skip-permissions']
+           '--permission-mode', 'dontAsk']
     sid = get_session(chat)
     if sid:
         cmd += ['--resume', sid]

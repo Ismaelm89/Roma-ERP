@@ -11,7 +11,16 @@ echo "════════════════════════�
 echo
 
 # ── 1) مصادقة claude بالاشتراك ────────────────────────────────
-if claude auth status >/dev/null 2>&1 || [ -f "$HOME/.claude.json" ]; then
+# ملاحظة: وجود ~/.claude.json مش دليل على تسجيل الدخول (بيتعمل مع أول تشغيل)،
+# فبنجرّب نداء فعلي ونشوف رد "Not logged in".
+echo "بتأكد إن claude متصل بحسابك..."
+if timeout 60 claude -p 'ok' --permission-mode dontAsk 2>&1 | grep -qi 'not logged in'; then
+  AUTHED=no
+else
+  AUTHED=yes
+fi
+
+if [ "$AUTHED" = yes ]; then
   echo "✅ claude متصل بحسابك خلاص."
 else
   echo "خطوة 1: توصيل claude بحساب الاشتراك بتاعك."

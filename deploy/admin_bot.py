@@ -73,7 +73,7 @@ def save_session(sid):
 def run_claude(prompt):
     """بينده claude في وضع headless وبيرجّع (النص, session_id)."""
     cmd = ['claude', '-p', prompt, '--output-format', 'json',
-           '--dangerously-skip-permissions']
+           '--permission-mode', 'dontAsk']
     sid = load_session()
     if sid:
         cmd += ['--resume', sid]
