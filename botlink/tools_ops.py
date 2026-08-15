@@ -554,6 +554,293 @@ def stock_take(item, counted):
     return f'اتعمل جرد {st.take_no} على {it.name_ar}\n' + '\n'.join(rows)
 
 
+# ------------------------------------------------- كروت جديدة: عملاء/موردين
+@transaction.atomic
+def create_customer(name, phone='', governorate='', opening_balance=0):
+    from sales.models import Customer
+    if Customer.objects.filter(name_ar=name).exists():
+        raise ValueError(f'فيه عميل بالاسم ده خلاص: {name}')
+    c = Customer.objects.create(name_ar=name, phone=phone, governorate=governorate,
+                                opening_balance=Decimal(str(opening_balance or 0)))
+    return f'اتعمل العميل {c.code} — {c.name_ar} (رصيد افتتاحي {money(c.opening_balance)})'
+
+
+@transaction.atomic
+def create_supplier(name, vendor_type, phone=''):
+    """vendor_type: قماش / إكسسوارات / مكن / منتجات تامة"""
+    from manufacturing.models import Supplier, VendorType
+    m = {'قماش': 'FABRIC_SUPPLIER', 'اكسسوارات': 'ACCESSORIES',
+         'إكسسوارات': 'ACCESSORIES', 'مكن': 'MACHINERY',
+         'منتجات تامة': 'FINISHED_GOODS', 'تجارة': 'FINISHED_GOODS'}
+    code = m.get((vendor_type or '').strip(), (vendor_type or '').upper())
+    vt = VendorType.objects.filter(code=code).first()
+    if not vt:
+        have = '، '.join(f'{v.name_ar}' for v in VendorType.objects.all())
+        raise ValueError(f'نوع المورد مش مظبوط. المتاح: {have}')
+    if Supplier.objects.filter(name=name).exists():
+        raise ValueError(f'فيه مورد بالاسم ده خلاص: {name}')
+    s = Supplier.objects.create(name=name, vendor_type=vt, phone=phone)
+    return f'اتعمل المورد {s.code} — {s.name} ({vt.name_ar})'
+
+
+@transaction.atomic
+def create_sub_product(main_product, name, fabric_color='', shorts_color=''):
+    """منتج فرعي (موديل/نادي) تحت منتج رئيسي — بياخد وصفته وأسعاره منه."""
+    from inventory.models import Product, Item
+    from manufacturing.models import FabricColor
+    p = Product.objects.filter(code__iexact=main_product).first() \
+        or Product.objects.filter(name_ar__icontains=main_product).first()
+    if not p:
+        raise ValueError(f'مفيش منتج رئيسي «{main_product}».')
+    if Item.objects.filter(name_ar=name).exists():
+        raise ValueError(f'فيه منتج فرعي بالاسم ده خلاص: {name}')
+    def col(n):
+        if not n:
+            return None
+        c = FabricColor.objects.filter(name_ar__icontains=n).first()
+        if not c:
+            raise ValueError(f'مفيش لون «{n}».')
+        return c
+    it = Item.objects.create(product=p, name_ar=name, fabric_color=col(fabric_color),
+                             shorts_fabric_color=col(shorts_color))
+    it.refresh_from_db()
+    return (f'اتعمل المنتج الفرعي {it.code} — {it.name_ar} تحت {p.name_ar} '
+            f'({it.variants.count()} مقاس)')
+
+
+# ------------------------------------------------- الوصفات والأسعار
+@transaction.atomic
+def set_prices(main_product, prices):
+    """تعديل سعر البيع لمقاسات منتج رئيسي. prices = {"XL": 95, "M": 90}"""
+    from inventory.models import Product
+    from inventory.services import sync_variants_from_recipe
+    p = Product.objects.filter(code__iexact=main_product).first() \
+        or Product.objects.filter(name_ar__icontains=main_product).first()
+    if not p:
+        raise ValueError(f'مفيش منتج رئيسي «{main_product}».')
+    rows = []
+    for size, price in (prices or {}).items():
+        r = p.size_recipes.filter(size__code=size).first()
+        if not r:
+            rows.append(f'  ⚠️ مقاس {size} مش في الوصفة')
+            continue
+        old = r.selling_price
+        r.selling_price = Decimal(str(price))
+        r.save(update_fields=['selling_price'])
+        rows.append(f'  {size}: {money(old)} → {money(r.selling_price)}')
+    for it in p.sub_products.all():
+        sync_variants_from_recipe(it)
+    return f'أسعار {p.name_ar}:\n' + '\n'.join(rows)
+
+
+@transaction.atomic
+def set_recipe_size(main_product, size, fabric_qty=None, shorts_fabric_qty=None,
+                    labor_cost=None, selling_price=None, reorder_level=None):
+    """تعديل وصفة مقاس (قماش/مصنعية/سعر/حد الطلب) — اللي متبعتوش مبيتغيّرش."""
+    from inventory.models import Product
+    from inventory.services import sync_variants_from_recipe
+    p = Product.objects.filter(code__iexact=main_product).first() \
+        or Product.objects.filter(name_ar__icontains=main_product).first()
+    if not p:
+        raise ValueError(f'مفيش منتج رئيسي «{main_product}».')
+    r = p.size_recipes.filter(size__code=size).first()
+    if not r:
+        raise ValueError(f'{p.name_ar}: مفيش وصفة لمقاس {size}.')
+    changed = []
+    for field, val in (('fabric_qty_kg', fabric_qty),
+                       ('shorts_fabric_qty_kg', shorts_fabric_qty),
+                       ('labor_cost', labor_cost), ('selling_price', selling_price),
+                       ('reorder_level', reorder_level)):
+        if val is not None:
+            old = getattr(r, field)
+            setattr(r, field, Decimal(str(val)))
+            changed.append(f'  {field}: {old} → {val}')
+    if not changed:
+        raise ValueError('مبعتّش أي قيمة تتغيّر.')
+    r.save()
+    for it in p.sub_products.all():
+        sync_variants_from_recipe(it)
+    return f'وصفة {p.name_ar} مقاس {size}:\n' + '\n'.join(changed)
+
+
+@transaction.atomic
+def set_recipe_accessory(main_product, size, accessory, qty_per_piece):
+    """تحديد/تعديل كمية إكسسوار في وصفة مقاس (0 = يشيله)."""
+    from inventory.models import Product
+    from manufacturing.models import Accessory, ProductSizeAccessory
+    p = Product.objects.filter(code__iexact=main_product).first() \
+        or Product.objects.filter(name_ar__icontains=main_product).first()
+    if not p:
+        raise ValueError(f'مفيش منتج رئيسي «{main_product}».')
+    r = p.size_recipes.filter(size__code=size).first()
+    if not r:
+        raise ValueError(f'{p.name_ar}: مفيش وصفة لمقاس {size}.')
+    a = Accessory.objects.filter(code__iexact=accessory).first() \
+        or Accessory.objects.filter(name_ar__icontains=accessory).first()
+    if not a:
+        raise ValueError(f'مفيش إكسسوار «{accessory}».')
+    q = Decimal(str(qty_per_piece))
+    row = ProductSizeAccessory.objects.filter(recipe=r, accessory=a).first()
+    if q <= 0:
+        if row:
+            row.delete()
+            return f'اتشال {a.name_ar} من وصفة {p.name_ar} مقاس {size}'
+        raise ValueError('الإكسسوار ده مش في الوصفة أصلاً.')
+    if row:
+        old = row.qty_per_piece
+        row.qty_per_piece = q
+        row.save(update_fields=['qty_per_piece'])
+        return f'{p.name_ar} مقاس {size}: {a.name_ar} {old} → {q} {a.unit}'
+    ProductSizeAccessory.objects.create(recipe=r, accessory=a, qty_per_piece=q)
+    return f'{p.name_ar} مقاس {size}: اتضاف {a.name_ar} × {q} {a.unit}'
+
+
+# ------------------------------------------------- المشتريات
+def _pay(payment, account):
+    if (payment or '').upper() in ('CREDIT', 'آجل', 'اجل'):
+        return 'CREDIT', None
+    acct = _cash_account(account)
+    return ('BANK' if acct.pk != 1 else 'CASH'), acct
+
+
+def buy_fabric(supplier, lines, payment='CREDIT', account='', date=''):
+    """شراء قماش. lines = [{fabric, color, qty, unit_cost}] — وبيترحّل على طول."""
+    from manufacturing.models import (FabricPurchaseInvoice, FabricBatch,
+                                      FabricType, FabricColor)
+    from manufacturing.services import post_fabric_purchase_invoice
+    s = _supplier(supplier)
+    method, acct = _pay(payment, account)
+    with transaction.atomic():
+        inv = FabricPurchaseInvoice.objects.create(
+            supplier=s, date=_date(date), payment_method=method, cash_account=acct,
+            notes='شراء من تليجرام')
+        rows, total = [], Decimal('0')
+        for ln in lines or []:
+            ft = FabricType.objects.filter(name_ar__icontains=ln.get('fabric')).first()
+            if not ft:
+                raise ValueError(f'مفيش نوع قماش «{ln.get("fabric")}».')
+            col = FabricColor.objects.filter(name_ar__icontains=ln.get('color', '')).first()
+            if not col:
+                raise ValueError(f'مفيش لون «{ln.get("color")}».')
+            qty = Decimal(str(ln.get('qty')))
+            cost = Decimal(str(ln.get('unit_cost')))
+            FabricBatch.objects.create(invoice=inv, supplier=s, fabric_type=ft, color=col,
+                                       purchase_date=inv.date, purchase_qty_kg=qty,
+                                       purchase_unit_cost=cost,
+                                       purchase_payment_method=method)
+            total += qty * cost
+            rows.append(f'  {ft.name_ar} {col.name_ar} — {qty} {ft.unit} × {money(cost)}')
+        post_fabric_purchase_invoice(inv)
+    return (f'اتعملت فاتورة شراء قماش {inv.invoice_no} من {s.name}\n'
+            + '\n'.join(rows) + f'\nالإجمالي {money(total)} | {method}')
+
+
+def buy_accessories(supplier, lines, payment='CREDIT', account='', date=''):
+    """شراء إكسسوارات. lines = [{accessory, qty, unit_cost}] (بوحدة الشراء)."""
+    from manufacturing.models import (AccessoryPurchaseInvoice, AccessoryPurchase,
+                                      Accessory)
+    from manufacturing.services import post_accessory_purchase_invoice
+    s = _supplier(supplier)
+    method, acct = _pay(payment, account)
+    with transaction.atomic():
+        inv = AccessoryPurchaseInvoice.objects.create(
+            supplier=s, date=_date(date), payment_method=method, cash_account=acct,
+            notes='شراء من تليجرام')
+        rows, total = [], Decimal('0')
+        for ln in lines or []:
+            a = Accessory.objects.filter(code__iexact=ln.get('accessory')).first() \
+                or Accessory.objects.filter(name_ar__icontains=ln.get('accessory')).first()
+            if not a:
+                raise ValueError(f'مفيش إكسسوار «{ln.get("accessory")}».')
+            qty = Decimal(str(ln.get('qty')))
+            cost = Decimal(str(ln.get('unit_cost')))
+            AccessoryPurchase.objects.create(
+                invoice=inv, accessory=a, supplier=s, date=inv.date, quantity=qty,
+                unit_cost=cost, payment_method=method, cash_account=acct)
+            total += qty * cost
+            rows.append(f'  {a.name_ar} — {qty} {a.purchase_unit} × {money(cost)}')
+        post_accessory_purchase_invoice(inv)
+    return (f'اتعملت فاتورة شراء إكسسوارات {inv.invoice_no} من {s.name}\n'
+            + '\n'.join(rows) + f'\nالإجمالي {money(total)} | {method}')
+
+
+def buy_finished_goods(supplier, lines, payment='CREDIT', account='', date=''):
+    """شراء منتجات تامة جاهزة. lines = [{item, size, qty, unit_cost}]."""
+    from inventory.models import FinishedGoodsPurchaseInvoice as F
+    from inventory.services import post_finished_goods_purchase_invoice
+    s = _supplier(supplier)
+    method, acct = _pay(payment, account)
+    method = 'CASH' if method in ('CASH', 'BANK') else 'CREDIT'
+    with transaction.atomic():
+        inv = F.objects.create(supplier=s, date=_date(date), payment_method=method,
+                               cash_account=acct, notes='شراء من تليجرام')
+        rows, total = [], Decimal('0')
+        for ln in lines or []:
+            it = _item(ln.get('item'))
+            v = _variant(it, ln.get('size'))
+            qty = Decimal(str(ln.get('qty')))
+            cost = Decimal(str(ln.get('unit_cost')))
+            inv.lines.create(variant=v, purchase_unit='PIECE', quantity=qty,
+                             unit_cost=cost)
+            total += qty * cost
+            rows.append(f'  {it.name_ar} {v.size} — {qty} × {money(cost)}')
+        post_finished_goods_purchase_invoice(inv)
+    return (f'اتعملت فاتورة شراء منتجات تامة {inv.invoice_no} من {s.name}\n'
+            + '\n'.join(rows) + f'\nالإجمالي {money(total)} | {method}')
+
+
+def cancel_fabric_purchase(invoice_no):
+    from manufacturing.models import FabricPurchaseInvoice
+    from manufacturing.services import cancel_fabric_purchase_invoice
+    inv = FabricPurchaseInvoice.objects.get(invoice_no=invoice_no)
+    with transaction.atomic():
+        cancel_fabric_purchase_invoice(inv)
+    return f'اتلغت فاتورة شراء القماش {invoice_no} — رجّع المخزون وعكس القيد.'
+
+
+def list_purchases(kind='fabric', limit=15):
+    """آخر فواتير الشراء: fabric / accessories / finished."""
+    if kind == 'accessories':
+        from manufacturing.models import AccessoryPurchaseInvoice as M
+    elif kind == 'finished':
+        from inventory.models import FinishedGoodsPurchaseInvoice as M
+    else:
+        from manufacturing.models import FabricPurchaseInvoice as M
+    rows = []
+    for i in M.objects.select_related('supplier').order_by('-date', '-id')[:limit]:
+        flag = ' (ملغاة)' if getattr(i, 'is_cancelled', False) else ''
+        rows.append('%s | %s | %s | %s%s' % (
+            i.invoice_no, i.date, i.supplier.name if i.supplier_id else '—',
+            i.payment_method, flag))
+    return '\n'.join(rows) or 'مفيش فواتير شراء.'
+
+
+# ------------------------------------------------- حذف (مسودات بس)
+def delete_draft(doc_no):
+    """حذف مستند **مسودة** (فاتورة بيع / أمر إنتاج). المرحّل مبيتحذفش — يتلغي."""
+    from sales.models import SalesInvoice
+    from manufacturing.models import ProductionOrder
+    doc_no = (doc_no or '').strip().upper()
+    if doc_no.startswith('INV'):
+        d = SalesInvoice.objects.get(invoice_no=doc_no)
+        if d.status != 'DRAFT':
+            raise ValueError(f'{doc_no} مش مسودة ({d.get_status_display()}) — '
+                             f'المرحّل بيتلغي مش بيتحذف، استخدم إلغاء الفاتورة.')
+        with transaction.atomic():
+            d.lines.all().delete()
+            d.delete()
+        return f'اتحذفت المسودة {doc_no}'
+    if doc_no.startswith('PO'):
+        d = ProductionOrder.objects.get(order_no=doc_no)
+        if d.status != 'DRAFT':
+            raise ValueError(f'{doc_no} مش خطة ({d.get_status_display()}) — '
+                             f'اللي اتنتج مينفعش يتحذف.')
+        with transaction.atomic():
+            d.delete()
+        return f'اتحذف أمر الإنتاج {doc_no}'
+    raise ValueError('اكتب رقم فاتورة بيع (INV-...) أو أمر إنتاج (PO-...).')
+
+
 # ----------------------------------------------------------------- schemas
 def _t(name, desc, props, required=()):
     return {'name': name, 'description': desc,
@@ -642,6 +929,63 @@ TOOLS = [
     _t('stock_take', 'جرد مخزون لمنتج: counted = {"XL": 48}.',
        {'item': _STR, 'counted': {'type': 'object'}, 'confirm': _BOOL},
        ['item', 'counted']),
+
+    # --- كروت جديدة ---
+    _t('create_customer', 'إضافة عميل جديد.',
+       {'name': _STR, 'phone': _STR, 'governorate': _STR,
+        'opening_balance': _NUM, 'confirm': _BOOL}, ['name']),
+    _t('create_supplier', 'إضافة مورد جديد. vendor_type: قماش / إكسسوارات / مكن / '
+       'منتجات تامة.',
+       {'name': _STR, 'vendor_type': _STR, 'phone': _STR, 'confirm': _BOOL},
+       ['name', 'vendor_type']),
+    _t('create_sub_product', 'إضافة منتج فرعي (موديل/نادي) تحت منتج رئيسي — '
+       'بياخد الوصفة والأسعار والمقاسات منه تلقائي.',
+       {'main_product': _STR, 'name': _STR, 'fabric_color': _STR,
+        'shorts_color': _STR, 'confirm': _BOOL}, ['main_product', 'name']),
+
+    # --- الوصفات والأسعار ---
+    _t('set_prices', 'تعديل أسعار البيع لمقاسات منتج رئيسي. '
+       'prices = {"XL": 95, "M": 90} — بيتطبّق على كل المنتجات الفرعية.',
+       {'main_product': _STR, 'prices': {'type': 'object'}, 'confirm': _BOOL},
+       ['main_product', 'prices']),
+    _t('set_recipe_size', 'تعديل وصفة مقاس: كمية القماش/قماش الشورت/المصنعية/'
+       'سعر البيع/حد إعادة الطلب. اللي متبعتوش مبيتغيّرش.',
+       {'main_product': _STR, 'size': _STR, 'fabric_qty': _NUM,
+        'shorts_fabric_qty': _NUM, 'labor_cost': _NUM, 'selling_price': _NUM,
+        'reorder_level': _NUM, 'confirm': _BOOL}, ['main_product', 'size']),
+    _t('set_recipe_accessory', 'تحديد كمية إكسسوار في وصفة مقاس (0 = يشيله).',
+       {'main_product': _STR, 'size': _STR, 'accessory': _STR,
+        'qty_per_piece': _NUM, 'confirm': _BOOL},
+       ['main_product', 'size', 'accessory', 'qty_per_piece']),
+
+    # --- المشتريات ---
+    _t('buy_fabric', 'فاتورة شراء قماش (بتترحّل على طول). '
+       'lines = [{fabric, color, qty, unit_cost}] · payment: CREDIT آجل أو CASH/BANK '
+       'مع account (بنك فيصل / الصندوق).',
+       {'supplier': _STR, 'lines': {'type': 'array', 'items': {'type': 'object'}},
+        'payment': _STR, 'account': _STR, 'date': _STR, 'confirm': _BOOL},
+       ['supplier', 'lines']),
+    _t('buy_accessories', 'فاتورة شراء إكسسوارات. lines = [{accessory, qty, unit_cost}] '
+       '(الكمية بوحدة الشراء).',
+       {'supplier': _STR, 'lines': {'type': 'array', 'items': {'type': 'object'}},
+        'payment': _STR, 'account': _STR, 'date': _STR, 'confirm': _BOOL},
+       ['supplier', 'lines']),
+    _t('buy_finished_goods', 'فاتورة شراء منتجات تامة جاهزة (تجارة). '
+       'lines = [{item, size, qty, unit_cost}].',
+       {'supplier': _STR, 'lines': {'type': 'array', 'items': {'type': 'object'}},
+        'payment': _STR, 'account': _STR, 'date': _STR, 'confirm': _BOOL},
+       ['supplier', 'lines']),
+    _t('cancel_fabric_purchase', 'إلغاء فاتورة شراء قماش مرحّلة (يرجّع المخزون '
+       'ويعكس القيد). مينفعش لو القماش اتصرف في الإنتاج.',
+       {'invoice_no': _STR, 'confirm': _BOOL}, ['invoice_no']),
+    _t('list_purchases', 'آخر فواتير الشراء: kind = fabric / accessories / finished.',
+       {'kind': {'type': 'string', 'enum': ['fabric', 'accessories', 'finished']},
+        'limit': {'type': 'integer'}}),
+
+    # --- حذف ---
+    _t('delete_draft', 'حذف مستند **مسودة** بس (فاتورة بيع INV-… أو أمر إنتاج PO-…). '
+       'المرحّل مبيتحذفش — بيتلغي.',
+       {'doc_no': _STR, 'confirm': _BOOL}, ['doc_no']),
 ]
 
 HANDLERS = {
@@ -670,6 +1014,18 @@ HANDLERS = {
     'produce_order': produce_order,
     'link_order_to_invoice': link_order_to_invoice,
     'stock_take': stock_take,
+    'create_customer': create_customer,
+    'create_supplier': create_supplier,
+    'create_sub_product': create_sub_product,
+    'set_prices': set_prices,
+    'set_recipe_size': set_recipe_size,
+    'set_recipe_accessory': set_recipe_accessory,
+    'buy_fabric': buy_fabric,
+    'buy_accessories': buy_accessories,
+    'buy_finished_goods': buy_finished_goods,
+    'cancel_fabric_purchase': cancel_fabric_purchase,
+    'list_purchases': list_purchases,
+    'delete_draft': delete_draft,
 }
 
 # الأدوات اللي بتقرا بس — بتتنفّذ على طول من غير موافقة.
@@ -678,7 +1034,7 @@ READ_ONLY = {
     'search_customers', 'customer_details', 'search_items', 'item_stock',
     'list_invoices', 'invoice_details', 'stock_report', 'balances_report',
     'check_invoice_stock', 'list_production_orders', 'production_order_details',
-    'search_suppliers', 'list_receipts',
+    'search_suppliers', 'list_receipts', 'list_purchases',
 }
 
 
@@ -720,6 +1076,37 @@ def summarize(tool, args):
         return f'ربط {a.get("order_no")} بفاتورة {a.get("invoice_no")}'
     if tool == 'stock_take':
         return f'⚠️ جرد {a.get("item")}\nالمعدود: {a.get("counted")}'
+    if tool == 'create_customer':
+        return (f'عميل جديد: {a.get("name")}'
+                + (f'\nتليفون: {a.get("phone")}' if a.get('phone') else '')
+                + (f'\nرصيد افتتاحي: {money(a.get("opening_balance"))}'
+                   if a.get('opening_balance') else ''))
+    if tool == 'create_supplier':
+        return f'مورد جديد: {a.get("name")} ({a.get("vendor_type")})'
+    if tool == 'create_sub_product':
+        return (f'منتج فرعي جديد: {a.get("name")}\nتحت: {a.get("main_product")}'
+                + (f'\nلون القماش: {a.get("fabric_color")}'
+                   if a.get('fabric_color') else ''))
+    if tool == 'set_prices':
+        return f'⚠️ تعديل أسعار {a.get("main_product")}\n{a.get("prices")}'
+    if tool == 'set_recipe_size':
+        vals = {k: v for k, v in a.items()
+                if k not in ('main_product', 'size') and v is not None}
+        return f'⚠️ تعديل وصفة {a.get("main_product")} مقاس {a.get("size")}\n{vals}'
+    if tool == 'set_recipe_accessory':
+        return (f'⚠️ وصفة {a.get("main_product")} مقاس {a.get("size")}: '
+                f'{a.get("accessory")} = {a.get("qty_per_piece")}')
+    if tool in ('buy_fabric', 'buy_accessories', 'buy_finished_goods'):
+        label = {'buy_fabric': 'قماش', 'buy_accessories': 'إكسسوارات',
+                 'buy_finished_goods': 'منتجات تامة'}[tool]
+        items = '، '.join(str(x) for x in (a.get('lines') or [])[:8]) or '—'
+        return (f'🧾 فاتورة شراء {label}\nالمورد: {a.get("supplier")}\n'
+                f'البنود: {items}\nالسداد: {a.get("payment", "CREDIT")}'
+                + (f' — {a.get("account")}' if a.get('account') else ''))
+    if tool == 'cancel_fabric_purchase':
+        return f'⚠️ إلغاء فاتورة شراء قماش {a.get("invoice_no")}'
+    if tool == 'delete_draft':
+        return f'🗑️ حذف المسودة {a.get("doc_no")} — الحذف نهائي'
     return f'{tool}: {a}'
 
 
