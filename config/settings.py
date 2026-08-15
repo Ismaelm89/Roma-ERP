@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'inventory',
     'sales',
     'manufacturing',
+    'botlink',
 ]
 
 MIDDLEWARE = [

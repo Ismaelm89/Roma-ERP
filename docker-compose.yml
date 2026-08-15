@@ -54,6 +54,27 @@ services:
           --error-logfile -
       "
 
+  # بوت العمليات على تليجرام — نفس صورة الويب، بس بيشغّل البوت بدل gunicorn.
+  # بيقوم بس لو عملت: docker compose --profile bots up -d
+  opsbot:
+    build: .
+    restart: unless-stopped
+    profiles: ["bots"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DATABASE_URL: postgres://${POSTGRES_USER:-roma}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-roma}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      TELEGRAM_OPS_BOT_TOKEN: ${TELEGRAM_OPS_BOT_TOKEN}
+      TELEGRAM_OPS_ALLOWED_IDS: ${TELEGRAM_OPS_ALLOWED_IDS}
+    volumes:
+      - media_data:/app/media
+    command: ["python", "manage.py", "run_ops_bot"]
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped

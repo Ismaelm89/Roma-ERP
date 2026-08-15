@@ -1,0 +1,18 @@
+[Unit]
+Description=Roma ERP — Telegram admin bot (Claude Code bridge)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/roma-erp
+# التوكنز والمفاتيح بتتقرا من نفس ملف .env بتاع المشروع
+EnvironmentFile=/opt/roma-erp/.env
+ExecStart=/usr/bin/python3 /opt/roma-erp/deploy/admin_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
