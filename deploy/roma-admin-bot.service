@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/roma-erp
 # التوكنز والمفاتيح بتتقرا من نفس ملف .env بتاع المشروع
+Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/opt/roma-erp/.env
 ExecStart=/usr/bin/python3 /opt/roma-erp/deploy/admin_bot.py
 Restart=always
