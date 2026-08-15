@@ -20,31 +20,39 @@ echo
 read -r -p "دوس Enter عشان نبدأ..." _
 echo
 
-claude setup-token
-echo
-echo "────────────────────────────────────────"
-echo "دلوقتي الزق **التوكن** اللي ظهر فوق — السطر اللي بيبدأ بـ sk-ant-oat01"
-echo "مش أي حاجة تانية (مش أمر SSH ولا الكود بتاع المتصفح)."
-echo "(مش هيظهر على الشاشة وإنت بتلزق — ده طبيعي)"
+# بنشغّل setup-token جوّه `script` عشان يفضل تفاعلي (المتصفح + الكود) وفي نفس
+# الوقت نسجّل المخرجات في ملف مؤقت، فنقدر نطلّع التوكن منه **أوتوماتيك** —
+# من غير ما المستخدم يحتاج ينسخ ويلزق حاجة (وده كان بيغلط كتير).
+LOG="$(mktemp)"
+chmod 600 "$LOG"
+trap 'shred -u "$LOG" 2>/dev/null || rm -f "$LOG"' EXIT
 
-TOKEN=''
-for try in 1 2 3; do
-  printf '> '
-  read -r -s TOKEN; echo
-  TOKEN="$(printf '%s' "$TOKEN" | tr -d ' \t\r\n\"'\''')"      # شيل مسافات/تنصيص
-  case "$TOKEN" in
-    sk-ant-oat*)
-      if [ "${#TOKEN}" -ge 60 ]; then break; fi
-      echo "  ❌ التوكن قصير (${#TOKEN} حرف) — يبدو إنه اتلزق ناقص. جرّب تاني." ;;
-    '') echo "  ❌ مدخلتش حاجة. جرّب تاني." ;;
-    *)  echo "  ❌ ده مش توكن — لازم يبدأ بـ sk-ant-oat01. جرّب تاني." ;;
-  esac
-  TOKEN=''
-done
+script -q -e -c "claude setup-token" "$LOG" </dev/tty >/dev/tty 2>&1
+
+TOKEN="$(grep -oE 'sk-ant-oat[A-Za-z0-9_.-]{20,}' "$LOG" | tail -1)"
+
 if [ -z "$TOKEN" ]; then
-  echo "❌ التوكن مش مظبوط. شغّل السكربت تاني وخد بالك تنسخ السطر الصح."
+  echo
+  echo "مقدرتش ألتقط التوكن أوتوماتيك — الزقه بإيدك (السطر اللي بيبدأ sk-ant-oat01):"
+  for try in 1 2 3; do
+    printf '> '
+    read -r -s T; echo
+    T="$(printf '%s' "$T" | tr -d ' \t\r\n\"'\''')"
+    case "$T" in
+      sk-ant-oat*) [ "${#T}" -ge 60 ] && { TOKEN="$T"; break; }
+                   echo "  ❌ ناقص (${#T} حرف). جرّب تاني." ;;
+      '')          echo "  ❌ مدخلتش حاجة. جرّب تاني." ;;
+      *)           echo "  ❌ ده مش توكن. جرّب تاني." ;;
+    esac
+  done
+fi
+
+if [ -z "$TOKEN" ]; then
+  echo "❌ مفيش توكن. شغّل السكربت تاني."
   exit 1
 fi
+echo
+echo "✅ التقطت التوكن (${#TOKEN} حرف)."
 
 echo "بختبر التوكن قبل ما أحفظه..."
 OUT="$(CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" timeout 120 claude -p 'اكتب كلمة تمام بس' \
