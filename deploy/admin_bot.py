@@ -70,10 +70,17 @@ def save_session(sid):
         pass
 
 
+# لازم نسمح بالأدوات صراحةً: وضع dontAsk لوحده بيرفض الأوامر اللي بيعتبرها خطرة
+# (زي docker exec)، وبما إن البوت ده للمالك وبيشتغل من غير تفاعل — بنسمح بالكل.
+ADMIN_TOOLS = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit',
+               'WebFetch', 'WebSearch', 'Task', 'TodoWrite']
+
+
 def run_claude(prompt):
     """بينده claude في وضع headless وبيرجّع (النص, session_id)."""
     cmd = ['claude', '-p', prompt, '--output-format', 'json',
-           '--permission-mode', 'dontAsk']
+           '--permission-mode', 'dontAsk',
+           '--allowedTools', *ADMIN_TOOLS]
     sid = load_session()
     if sid:
         cmd += ['--resume', sid]
