@@ -815,6 +815,47 @@ def list_purchases(kind='fabric', limit=15):
     return '\n'.join(rows) or 'مفيش فواتير شراء.'
 
 
+def purchase_details(invoice_no):
+    """بنود فاتورة شراء (قماش FPI-… / إكسسوارات / منتجات تامة FGP-…) وحالتها."""
+    from manufacturing.models import FabricPurchaseInvoice, AccessoryPurchaseInvoice
+    from inventory.models import FinishedGoodsPurchaseInvoice
+    no = (invoice_no or '').strip().upper()
+    for M in (FabricPurchaseInvoice, AccessoryPurchaseInvoice,
+              FinishedGoodsPurchaseInvoice):
+        inv = M.objects.filter(invoice_no__iexact=no).first()
+        if not inv:
+            continue
+        state = 'مرحّلة' if inv.is_posted else 'مسودة'
+        if getattr(inv, 'is_cancelled', False):
+            state = 'ملغاة'
+        out = ['%s | %s | المورد: %s | السداد: %s | %s' % (
+            inv.invoice_no, inv.date,
+            inv.supplier.name if inv.supplier_id else '—',
+            inv.payment_method, state), 'البنود:']
+        total = Decimal('0')
+        for l in inv.lines.all():
+            if hasattr(l, 'fabric_type'):                      # قماش
+                qty, cost = Decimal(l.purchase_qty_kg), Decimal(l.purchase_unit_cost or 0)
+                out.append('  %s %s | مشترى %s %s | متبقّي %s | × %s = %s' % (
+                    l.fabric_type.name_ar,
+                    l.color.name_ar if l.color_id else '', qty, l.fabric_type.unit,
+                    l.in_stock_qty_kg, money(cost), money(qty * cost)))
+            elif hasattr(l, 'accessory'):                      # إكسسوارات
+                qty, cost = Decimal(l.quantity), Decimal(l.unit_cost or 0)
+                out.append('  %s | %s %s × %s = %s' % (
+                    l.accessory.name_ar, qty, l.accessory.purchase_unit,
+                    money(cost), money(qty * cost)))
+            else:                                              # منتجات تامة
+                qty, cost = Decimal(l.quantity), Decimal(l.unit_cost or 0)
+                out.append('  %s | مقاس %s | %s × %s = %s' % (
+                    l.variant.item.name_ar, l.variant.size, qty, money(cost),
+                    money(qty * cost)))
+            total += qty * cost
+        out.append('الإجمالي: %s' % money(total))
+        return '\n'.join(out)
+    raise ValueError(f'مفيش فاتورة شراء بالرقم «{invoice_no}».')
+
+
 # ------------------------------------------------- حذف (مسودات بس)
 def delete_draft(doc_no):
     """حذف مستند **مسودة** (فاتورة بيع / أمر إنتاج). المرحّل مبيتحذفش — يتلغي."""
@@ -978,6 +1019,8 @@ TOOLS = [
     _t('cancel_fabric_purchase', 'إلغاء فاتورة شراء قماش مرحّلة (يرجّع المخزون '
        'ويعكس القيد). مينفعش لو القماش اتصرف في الإنتاج.',
        {'invoice_no': _STR, 'confirm': _BOOL}, ['invoice_no']),
+    _t('purchase_details', 'بنود فاتورة شراء وحالتها (FPI-… قماش / FGP-… منتجات تامة / إكسسوارات).',
+       {'invoice_no': _STR}, ['invoice_no']),
     _t('list_purchases', 'آخر فواتير الشراء: kind = fabric / accessories / finished.',
        {'kind': {'type': 'string', 'enum': ['fabric', 'accessories', 'finished']},
         'limit': {'type': 'integer'}}),
@@ -1024,6 +1067,7 @@ HANDLERS = {
     'buy_accessories': buy_accessories,
     'buy_finished_goods': buy_finished_goods,
     'cancel_fabric_purchase': cancel_fabric_purchase,
+    'purchase_details': purchase_details,
     'list_purchases': list_purchases,
     'delete_draft': delete_draft,
 }
@@ -1034,7 +1078,7 @@ READ_ONLY = {
     'search_customers', 'customer_details', 'search_items', 'item_stock',
     'list_invoices', 'invoice_details', 'stock_report', 'balances_report',
     'check_invoice_stock', 'list_production_orders', 'production_order_details',
-    'search_suppliers', 'list_receipts', 'list_purchases',
+    'search_suppliers', 'list_receipts', 'list_purchases', 'purchase_details',
 }
 
 
