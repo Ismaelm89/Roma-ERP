@@ -23,7 +23,10 @@
 .page.copy table td { padding: 3px 6px; font-size: 11px; }
 .page.copy .totals td { padding: 2px 8px !important; }
 
-/* === Watermark: wide, faint, visible in printed PDF too === */
+/* === Watermark: wide, faint, visible in printed PDF too ===
+   نسخة «أصل» بتطلع نضيفة من غير علامة مائية — العلامة على «صورة» بس عشان
+   تفرّق بينهم. */
+.page.copy[data-copy="أصل"]::before { content: none; }
 .page.copy::before {
     content: attr(data-copy);
     position: absolute;
