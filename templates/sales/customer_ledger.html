@@ -59,4 +59,16 @@
         </tr>
     </tfoot>
 </table>
+
+{% if hidden_count %}
+<p class="muted no-print" style="margin-top:10px;">
+    اتخفت {{ hidden_count }} حركة ملغاة (المستند وقيد إلغائه) عشان الكشف يبقى نضيف —
+    الرصيد زي ما هو.
+    <a href="?show_cancelled=1">اعرضها</a>
+</p>
+{% elif show_cancelled %}
+<p class="muted no-print" style="margin-top:10px;">
+    بتشوف الحركات الملغاة. <a href="?">اخفيها</a>
+</p>
+{% endif %}
 {% endblock %}

@@ -659,6 +659,20 @@ def customer_ledger(request, pk):
           .select_related('entry', 'account')
           .order_by('entry__date', 'entry__id', 'id'))
 
+    lines = list(qs)
+
+    # المستند الملغي وقيد إلغائه بيلغوا بعض، فعرضهم بيوسّخ الكشف من غير ما يغيّر
+    # الرصيد. بنخفي الاتنين (قيد الإلغاء مرجعه CANCEL-<مرجع الأصل>).
+    # ?show_cancelled=1 بيرجّعهم للمراجعة.
+    show_cancelled = request.GET.get('show_cancelled') == '1'
+    hidden_refs = set()
+    if not show_cancelled:
+        for line in lines:
+            ref = line.entry.reference or ''
+            if ref.startswith('CANCEL-'):
+                hidden_refs.add(ref)
+                hidden_refs.add(ref[len('CANCEL-'):])
+
     rows = []
     running = Decimal(customer.opening_balance or 0)
     if running != 0:
@@ -671,7 +685,11 @@ def customer_ledger(request, pk):
             'balance': running,
         })
 
-    for line in qs:
+    hidden_count = 0
+    for line in lines:
+        if (line.entry.reference or '') in hidden_refs:
+            hidden_count += 1
+            continue
         running += Decimal(line.debit) - Decimal(line.credit)
         rows.append({
             'date': line.entry.date,
@@ -686,6 +704,8 @@ def customer_ledger(request, pk):
         'customer': customer,
         'rows': rows,
         'closing_balance': running,
+        'hidden_count': hidden_count,
+        'show_cancelled': show_cancelled,
         'today': date.today(),
         'company': Company.objects.first(),
     })
