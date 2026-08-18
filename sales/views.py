@@ -664,14 +664,28 @@ def customer_ledger(request, pk):
     # المستند الملغي وقيد إلغائه بيلغوا بعض، فعرضهم بيوسّخ الكشف من غير ما يغيّر
     # الرصيد. بنخفي الاتنين (قيد الإلغاء مرجعه CANCEL-<مرجع الأصل>).
     # ?show_cancelled=1 بيرجّعهم للمراجعة.
+    # مهم: مستند ممكن يتلغي ويترحّل تاني بنفس الرقم، فبنطابق كل قيد إلغاء بقيد
+    # واحد بعينه (أقدم ترحيل لسه متلغيش) — مش بكل القيود اللي ليها نفس المرجع،
+    # وإلا كنا هنخفي الترحيل الجديد كمان ونغيّر الرصيد.
     show_cancelled = request.GET.get('show_cancelled') == '1'
-    hidden_refs = set()
+    hidden_entries = set()
     if not show_cancelled:
+        by_ref = {}
         for line in lines:
-            ref = line.entry.reference or ''
-            if ref.startswith('CANCEL-'):
-                hidden_refs.add(ref)
-                hidden_refs.add(ref[len('CANCEL-'):])
+            entry = line.entry
+            ids = by_ref.setdefault(entry.reference or '', [])
+            if entry.id not in ids:
+                ids.append(entry.id)
+        for line in lines:
+            entry = line.entry
+            ref = entry.reference or ''
+            if not ref.startswith('CANCEL-') or entry.id in hidden_entries:
+                continue
+            for orig_id in by_ref.get(ref[len('CANCEL-'):], []):
+                if orig_id not in hidden_entries:
+                    hidden_entries.add(orig_id)     # المستند الملغي
+                    hidden_entries.add(entry.id)    # وقيد الإلغاء بتاعه
+                    break
 
     rows = []
     running = Decimal(customer.opening_balance or 0)
@@ -687,7 +701,7 @@ def customer_ledger(request, pk):
 
     hidden_count = 0
     for line in lines:
-        if (line.entry.reference or '') in hidden_refs:
+        if line.entry.id in hidden_entries:
             hidden_count += 1
             continue
         running += Decimal(line.debit) - Decimal(line.credit)
