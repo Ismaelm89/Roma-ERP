@@ -18,6 +18,9 @@ import time
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tg_voice
+
 REPO = os.environ.get('ROMA_REPO', '/opt/roma-erp')
 TIMEOUT = int(os.environ.get('ADMIN_BOT_TIMEOUT', '900'))     # 15 دقيقة للمهمة
 STATE = os.path.join(REPO, 'deploy', '.admin_bot_session')
@@ -29,6 +32,8 @@ HELP = """أهلاً 👋 أنا بوت المدير — Claude Code على ال
 • «عدّل كذا في الكود وانزله»
 • «اعمل تقرير كذا من الداتا»
 • «اعمل فاتورة كذا»
+
+🎤 وتقدر تبعتلي **رسالة صوتية** بدل ما تكتب.
 
 /new = ابدأ من أول وجديد (يمسح ذاكرة المحادثة)
 /help = المساعدة"""
@@ -143,8 +148,9 @@ def main():
         for u in updates:
             offset = u['update_id'] + 1
             msg = u.get('message') or {}
+            is_voice = tg_voice.is_voice(msg)
             text = (msg.get('text') or '').strip()
-            if not text:
+            if not text and not is_voice:
                 continue
             chat = msg['chat']['id']
             uid = (msg.get('from') or {}).get('id')
@@ -163,6 +169,13 @@ def main():
             threading.Thread(target=keep_typing, args=(token, chat, stop),
                              daemon=True).start()
             try:
+                if is_voice:
+                    text, err = tg_voice.to_text(token, msg)
+                    if err:
+                        send(token, chat, err)
+                        continue
+                    # بنوريه اللي سمعناه عشان لو الكلام اتفهم غلط يصحّحه
+                    send(token, chat, f'🎤 سمعت: {text}')
                 reply, sid = run_claude(text)
             finally:
                 stop.set()

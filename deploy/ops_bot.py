@@ -15,6 +15,9 @@ import threading
 import time
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tg_voice
+
 REPO = os.environ.get('ROMA_REPO', '/opt/roma-erp')
 MCP_CONFIG = os.path.join(REPO, 'deploy', 'mcp-ops.json')
 SESSION_DIR = os.path.join(REPO, 'deploy', '.ops_sessions')
@@ -48,6 +51,7 @@ HELP = """أهلاً 👋 أنا مساعد العمليات بتاع روما.
 • «قيمة المخزون كام؟»
 
 أي حاجة هتغيّر بيانات هقولك عليها الأول وأستنى تقولي «تمام».
+🎤 وتقدر تبعتلي **رسالة صوتية** بدل ما تكتب.
 /new = ابدأ محادثة جديدة"""
 
 
@@ -157,12 +161,13 @@ def main():
         for u in updates:
             offset = u['update_id'] + 1
             msg = u.get('message') or {}
+            is_voice = tg_voice.is_voice(msg)
+
             text = (msg.get('text') or '').strip()
-            if not text:
+            if not text and not is_voice:
                 continue
             chat = msg['chat']['id']
             uid = (msg.get('from') or {}).get('id')
-            print(f'وصلت رسالة من {uid} (chat {chat}): {text[:60]}')
             if uid not in allowed:
                 print(f'  ← مرفوض: {uid} مش في {sorted(allowed)}')
                 # بنقوله رقمه عشان يبعته لصاحب النظام ويضيفه — من غير ما يحتاج
@@ -179,11 +184,21 @@ def main():
                 set_session(chat, '')
                 send(token, chat, 'تمام، بدأنا محادثة جديدة.')
                 continue
+
             stop = threading.Event()
             threading.Thread(target=keep_typing, args=(token, chat, stop),
                              daemon=True).start()
             t0 = time.time()
             try:
+                if is_voice:
+                    text, err = tg_voice.to_text(token, msg)
+                    if err:
+                        send(token, chat, err)
+                        continue
+                    # بنوريه اللي سمعناه عشان لو الكلام اتفهم غلط يصحّحه
+                    send(token, chat, f'🎤 سمعت: {text}')
+                print(f'وصلت رسالة من {uid} (chat {chat})'
+                      f'{" [صوت]" if is_voice else ""}: {text[:60]}')
                 reply, sid = run_claude(chat, text)
             finally:
                 stop.set()

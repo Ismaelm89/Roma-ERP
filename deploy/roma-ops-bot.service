@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/opt/roma-erp
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/opt/roma-erp/.env
-ExecStart=/usr/bin/python3 /opt/roma-erp/deploy/ops_bot.py
+ExecStart=/opt/roma-erp/deploy/.venv-stt/bin/python3 /opt/roma-erp/deploy/ops_bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
