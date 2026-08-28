@@ -1,26 +1,64 @@
 #!/usr/bin/env python3
-"""تحويل الفويس نوت لنص — شغّال على السيرفر نفسه (مجاناً، من غير أي خدمة مدفوعة).
+"""تحويل الفويس نوت لنص.
 
-بيستخدم faster-whisper. النموذج بيتحمّل مرة واحدة أول استخدام وبيفضل في الذاكرة،
-فأول فويس نوت بتاخد وقت زيادة والباقي أسرع.
+بيجرّب **Groq** الأول (نموذج whisper-large-v3 — أسرع وأدق بكتير في المصري،
+وليه باقة مجانية)، ولو مفيش مفتاح أو الخدمة وقعت بيرجع للنموذج المحلي
+(faster-whisper على السيرفر) عشان الصوت ميقفش خالص.
 
-بيتنادى من بوتات تليجرام:  from stt import transcribe
-وكمان ينفع من الترمينال للاختبار:  python3 deploy/stt.py file.ogg
+الاستخدام:  from stt import transcribe
+للاختبار:   python3 deploy/stt.py file.ogg
 """
+import json
 import os
 import sys
+import urllib.error
+import urllib.request
 
-MODEL_SIZE = os.environ.get('STT_MODEL', 'small')     # base=أسرع · small=أدق
+GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions'
+GROQ_MODEL = os.environ.get('GROQ_STT_MODEL', 'whisper-large-v3-turbo')
 LANGUAGE = os.environ.get('STT_LANG', 'ar')
+MODEL_SIZE = os.environ.get('STT_MODEL', 'small')          # المحلي (احتياطي)
+CONTEXT = ('محادثة عن نظام مبيعات ومخزون: فواتير، عملاء، موردين، إيصالات قبض، '
+           'أوامر إنتاج، مقاسات وكميات.')
 _model = None
 
 
+# --------------------------------------------------------------- Groq
+def _multipart(fields, filename, content):
+    """تجميع طلب multipart بالـ stdlib (من غير مكتبات إضافية)."""
+    b = '----RomaVoiceBoundary7d91f3a2c85e4b60'
+    out = []
+    for k, v in fields.items():
+        out.append(f'--{b}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n'
+                   f'{v}\r\n'.encode())
+    out.append(f'--{b}\r\nContent-Disposition: form-data; name="file"; '
+               f'filename="{filename}"\r\n'
+               f'Content-Type: application/octet-stream\r\n\r\n'.encode())
+    out.append(content)
+    out.append(f'\r\n--{b}--\r\n'.encode())
+    return b, b''.join(out)
+
+
+def _groq(path, api_key, timeout=120):
+    with open(path, 'rb') as f:
+        content = f.read()
+    boundary, body = _multipart(
+        {'model': GROQ_MODEL, 'language': LANGUAGE,
+         'response_format': 'json', 'prompt': CONTEXT},
+        os.path.basename(path), content)
+    req = urllib.request.Request(GROQ_URL, data=body, headers={
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return (json.loads(r.read().decode('utf-8')).get('text') or '').strip()
+
+
+# --------------------------------------------------------------- محلي
 def _load():
-    """بيحمّل النموذج مرة واحدة بس (تحميل ثقيل نسبياً)."""
     global _model
     if _model is None:
         from faster_whisper import WhisperModel
-        # int8 على المعالج = أسرع بكتير وبدقة قريبة من float
         _model = WhisperModel(MODEL_SIZE, device='cpu', compute_type='int8',
                               cpu_threads=max(1, (os.cpu_count() or 4) - 2),
                               download_root=os.path.join(
@@ -29,15 +67,31 @@ def _load():
     return _model
 
 
+def _local(path):
+    segments, _ = _load().transcribe(path, language=LANGUAGE, vad_filter=True,
+                                     initial_prompt=CONTEXT)
+    return ' '.join(s.text.strip() for s in segments).strip()
+
+
+# --------------------------------------------------------------- الواجهة
 def transcribe(path):
     """بيرجّع نص الفويس نوت (أو نص فاضي لو مفيش كلام مفهوم)."""
-    model = _load()
-    segments, _info = model.transcribe(
-        path, language=LANGUAGE, vad_filter=True,
-        # الأرقام والأسماء بتطلع أظبط لما ندّي النموذج سياق الشغل
-        initial_prompt='محادثة عن نظام مبيعات ومخزون: فواتير، عملاء، موردين، '
-                       'إيصالات قبض، أوامر إنتاج، مقاسات وكميات.')
-    return ' '.join(s.text.strip() for s in segments).strip()
+    key = os.environ.get('GROQ_API_KEY', '').strip()
+    if key:
+        try:
+            text = _groq(path, key)
+            if text:
+                return text
+            print('groq: رجّع نص فاضي — بجرّب المحلي', file=sys.stderr)
+        except Exception as e:
+            detail = ''
+            if isinstance(e, urllib.error.HTTPError):
+                try:
+                    detail = e.read()[:200].decode('utf-8', 'replace')
+                except Exception:
+                    pass
+            print(f'groq failed ({e}) {detail} — بجرّب المحلي', file=sys.stderr)
+    return _local(path)
 
 
 if __name__ == '__main__':
