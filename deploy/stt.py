@@ -46,9 +46,12 @@ def _groq(path, api_key, timeout=120):
         {'model': GROQ_MODEL, 'language': LANGUAGE,
          'response_format': 'json', 'prompt': CONTEXT},
         os.path.basename(path), content)
+    # لازم User-Agent: Cloudflare بترفض الطلبات اللي مالهاش هوية (خطأ 1010).
     req = urllib.request.Request(GROQ_URL, data=body, headers={
         'Authorization': f'Bearer {api_key}',
         'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'User-Agent': 'roma-erp-voice/1.0',
+        'Accept': 'application/json',
     })
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return (json.loads(r.read().decode('utf-8')).get('text') or '').strip()
