@@ -89,60 +89,6 @@ class Customer(models.Model):
                 - (agg['c'] or Decimal('0')))
 
 
-class CustomerPrice(models.Model):
-    """سعر خاص بعميل معيّن لمقاس (SKU) معيّن — «قائمة أسعار العميل».
-
-    قبل كده كان سعر العميل الخاص بيتكتب بالإيد في كل بند فاتورة، فأي غلطة
-    كتابة بتفضل مستورة (مثلاً صنف اتسعّر بسعر منتج تاني). الجدول ده بيخزّن
-    السعر مرة واحدة والفواتير بتتعبّى منه تلقائياً.
-
-    السعر هنا **سعر القطعة** — نفس أساس `ItemVariant.selling_price` — عشان
-    حساب وحدة الجملة (× عدد القطع في الدستة/الكرتونة) يفضل زي ما هو.
-    خصم التاجر على الفاتورة (`doc_discount_percent`) بيتطبّق فوق السعر ده
-    زي ما كان بالظبط.
-    """
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE,
-                                 related_name='special_prices',
-                                 verbose_name='العميل')
-    variant = models.ForeignKey('inventory.ItemVariant', on_delete=models.CASCADE,
-                                related_name='customer_prices',
-                                verbose_name='المقاس (SKU)')
-    piece_price = models.DecimalField('سعر القطعة الخاص', max_digits=12, decimal_places=2,
-                                      help_text='سعر القطعة للعميل ده. سعر الدستة = ده × '
-                                                'عدد القطع في الدستة. خصم التاجر بيتحسب فوقه.')
-    active = models.BooleanField('نشط', default=True)
-    notes = models.CharField('ملاحظات', max_length=200, blank=True)
-    updated_at = models.DateTimeField('آخر تحديث', auto_now=True)
-
-    class Meta:
-        verbose_name = 'سعر خاص بعميل'
-        verbose_name_plural = 'قوائم أسعار العملاء'
-        unique_together = [('customer', 'variant')]
-        ordering = ['customer__code', 'variant__item__code', 'variant__size_order']
-
-    def __str__(self):
-        return f'{self.customer.code} · {self.variant} = {self.piece_price}'
-
-    @classmethod
-    def price_for(cls, customer_id, variant_id):
-        """سعر القطعة الخاص بالعميل ده للمقاس ده، أو None لو مفيش."""
-        try:
-            customer_id, variant_id = int(customer_id), int(variant_id)
-        except (TypeError, ValueError):
-            return None
-        row = cls.objects.filter(customer_id=customer_id, variant_id=variant_id,
-                                 active=True).values_list('piece_price', flat=True).first()
-        return Decimal(row) if row is not None else None
-
-    @property
-    def standard_price(self):
-        return Decimal(self.variant.selling_price or 0)
-
-    @property
-    def difference(self):
-        return (Decimal(self.piece_price or 0) - self.standard_price).quantize(Decimal('0.01'))
-
-
 class SalesInvoice(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'مسودة'),
@@ -375,14 +321,9 @@ class SalesInvoiceLine(models.Model):
         # Derive item from the selected variant.
         if self.variant_id and not self.item_id:
             self.item = self.variant.item
-        # Auto-fill unit_price = piece price × عدد القطع في الوحدة.
-        # الأولوية لسعر العميل الخاص (CustomerPrice) ولو مفيش نرجع لسعر المنتج.
+        # Auto-fill unit_price = piece selling price × عدد القطع في الوحدة.
         if (not self.unit_price or Decimal(self.unit_price) == 0) and self.variant_id:
-            piece = CustomerPrice.price_for(
-                self.invoice.customer_id if self.invoice_id else None,
-                self.variant_id)
-            if piece is None:
-                piece = Decimal(self.variant.selling_price or 0)
+            piece = Decimal(self.variant.selling_price or 0)
             self.unit_price = (piece * self.unit_factor).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 
@@ -579,13 +520,7 @@ class SalesReturnLine(models.Model):
         if self.variant_id and not self.item_id:
             self.item = self.variant.item
         if (not self.unit_price or Decimal(self.unit_price) == 0) and self.variant_id:
-            # نفس منطق الفاتورة: سعر العميل الخاص الأول، وبعدين سعر الكتالوج.
-            piece = CustomerPrice.price_for(
-                self.return_doc.customer_id if self.return_doc_id else None,
-                self.variant_id)
-            if piece is None:
-                piece = Decimal(self.variant.selling_price or 0)
-            self.unit_price = Decimal(piece).quantize(Decimal('0.01'))
+            self.unit_price = Decimal(self.variant.selling_price or 0).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 
     def recalc(self):

@@ -28,7 +28,6 @@ SIDEBAR = [
     ]),
     ('SALES', [
         ('sales', 'Customer'),
-        ('sales', 'CustomerPrice'),
         ('sales', 'Receipt'),
         ('sales', 'SalesInvoice'),
         ('sales', 'SalesReturn'),

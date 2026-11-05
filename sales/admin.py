@@ -8,7 +8,7 @@ from core.admin_mixins import LockAfterPostMixin, LockedInlineMixin
 from core.templatetags.money_filters import fmt_money
 
 from .models import (
-    Customer, CustomerPrice, SalesInvoice, SalesInvoiceLine,
+    Customer, SalesInvoice, SalesInvoiceLine,
     Receipt, ReceiptAllocation,
     SalesReturn, SalesReturnLine,
 )
@@ -20,40 +20,13 @@ from .services import (
 )
 
 
-@admin.action(description='🧾 توليد قائمة أسعار من الفواتير المرحّلة السابقة')
-def action_build_price_lists(modeladmin, request, queryset):
-    from .pricing import build_price_list_from_invoices
-    for cust in queryset:
-        res = build_price_list_from_invoices(cust)
-        if res['created'] or res['updated']:
-            messages.success(
-                request,
-                f'{cust.code} {cust.name_ar}: اتضاف {res["created"]} سعر جديد، '
-                f'اتحدّث {res["updated"]}، من {res["invoices"]} فاتورة مرحّلة '
-                f'(اتخدت آخر سعر لكل مقاس).')
-        else:
-            messages.warning(request,
-                             f'{cust.code} {cust.name_ar}: مفيش أسعار اتولّدت '
-                             f'(فواتير مرحّلة: {res["invoices"]}).')
-
-
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
     list_display = ('code', 'name_ar', 'phone', 'governorate', 'payment_terms_days',
-                     'credit_limit', 'balance_col', 'ledger_link', 'prices_link', 'active')
+                     'credit_limit', 'balance_col', 'ledger_link', 'active')
     list_filter = ('active', 'governorate')
     search_fields = ('code', 'name_ar', 'name_en', 'tax_id', 'phone')
     readonly_fields = ('code',)  # auto-assigned C0001, C0002 ...
-    actions = [action_build_price_lists]
-
-    def prices_link(self, obj):
-        n = obj.special_prices.filter(active=True).count()
-        url = (reverse('admin:sales_customerprice_changelist')
-               + f'?customer__id__exact={obj.pk}')
-        if not n:
-            return format_html('<a href="{}" style="color:#888">— لا يوجد —</a>', url)
-        return format_html('<a href="{}"><b>{}</b> سعر خاص</a>', url, n)
-    prices_link.short_description = 'أسعار خاصة'
 
     def ledger_link(self, obj):
         url = reverse('sales:customer_ledger', args=[obj.pk])
@@ -66,57 +39,6 @@ class CustomerAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {}; font-variant-numeric: tabular-nums;">{}</span>',
                             color, fmt_money(bal))
     balance_col.short_description = 'الرصيد الحالي'
-
-
-@admin.action(description='تفعيل الأسعار المحددة')
-def action_activate_prices(modeladmin, request, queryset):
-    n = queryset.update(active=True)
-    messages.success(request, f'تم تفعيل {n} سعر.')
-
-
-@admin.action(description='إيقاف الأسعار المحددة')
-def action_deactivate_prices(modeladmin, request, queryset):
-    n = queryset.update(active=False)
-    messages.success(request, f'تم إيقاف {n} سعر.')
-
-
-@admin.register(CustomerPrice)
-class CustomerPriceAdmin(admin.ModelAdmin):
-    """قائمة أسعار العميل — فلتر على العميل وعدّل الأسعار كلها في جدول واحد."""
-    list_display = ('customer', 'item_col', 'size_col', 'piece_price',
-                    'standard_col', 'diff_col', 'active', 'notes', 'updated_at')
-    list_editable = ('piece_price', 'active', 'notes')
-    list_filter = ('active', 'customer')
-    search_fields = ('customer__code', 'customer__name_ar',
-                     'variant__sku_code', 'variant__item__code', 'variant__item__name_ar')
-    autocomplete_fields = ('customer', 'variant')
-    list_per_page = 200
-    actions = [action_activate_prices, action_deactivate_prices]
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            'customer', 'variant', 'variant__item')
-
-    def item_col(self, obj):
-        it = obj.variant.item
-        return f'{it.code} — {it.name_ar}'
-    item_col.short_description = 'الصنف'
-    item_col.admin_order_field = 'variant__item__code'
-
-    def size_col(self, obj):
-        return obj.variant.size
-    size_col.short_description = 'المقاس'
-    size_col.admin_order_field = 'variant__size_order'
-
-    def standard_col(self, obj):
-        return fmt_money(obj.standard_price)
-    standard_col.short_description = 'سعر الكتالوج'
-
-    def diff_col(self, obj):
-        d = obj.difference
-        color = '#15803d' if d >= 0 else '#b91c1c'
-        return format_html('<b style="color:{}">{}</b>', color, fmt_money(d))
-    diff_col.short_description = 'الفرق'
 
 
 class SalesInvoiceLineInlineForm(forms.ModelForm):
