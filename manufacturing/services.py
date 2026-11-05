@@ -494,6 +494,37 @@ def post_supplier_payment(payment: SupplierPayment, user=None):
     return je
 
 
+def cancel_supplier_payment(payment: SupplierPayment, user=None):
+    """إلغاء سند دفع مرحّل — يعكس القيد (يرجّع الفلوس ورصيد المورد) بقيد عكسي،
+    نفس أسلوب cancel_receipt."""
+    if payment.status != 'POSTED':
+        raise FabricPostingError(f'سند الدفع {payment.payment_no} حالته {payment.get_status_display()} — '
+                                  'لازم يكون مرحّل عشان تقدر تلغيه.')
+
+    orig = payment.journal_entry
+    rev = JournalEntry.objects.create(
+        date=timezone.now().date(),
+        reference=f'CANCEL-{payment.payment_no}',
+        description=f'إلغاء سند دفع {payment.payment_no}',
+        status='POSTED',
+        source_doc_type='SupplierPayment.Cancel',
+        source_doc_id=payment.id,
+        created_by=user,
+    )
+    if orig:
+        for line in orig.lines.all():
+            JournalLine.objects.create(
+                entry=rev, account=line.account,
+                debit=line.credit, credit=line.debit,
+                description=f'إلغاء — {line.description}',
+                supplier=line.supplier,
+            )
+    rev.recalc_totals()
+    payment.status = 'CANCELLED'
+    payment.save(update_fields=['status'])
+    return rev
+
+
 # ============================================================
 #  2b) Manufacturing wage payment (صرف مصنعيات) — Phase C
 # ============================================================

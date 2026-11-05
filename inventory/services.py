@@ -157,6 +157,61 @@ def post_finished_goods_purchase_invoice(invoice, user=None):
     return je
 
 
+@transaction.atomic
+def cancel_finished_goods_purchase_invoice(invoice, user=None):
+    """إلغاء فاتورة شراء منتجات تامة مرحّلة — يعكس القيد ويشيل الكميات اللي دخلت
+    المخزون (ADJUST_OUT)، بشرط إن الرصيد لسه موجود (لو اتباع جزء منه بيرفض)."""
+    if not invoice.is_posted:
+        raise FinishedGoodsPostingError(f'الفاتورة {invoice.invoice_no} مش مرحّلة أصلاً.')
+
+    lines = list(invoice.lines.select_related('variant').all())
+    shortages = []
+    for p in lines:
+        pieces = p.pieces_in
+        if Decimal(p.variant.current_stock or 0) < pieces:
+            shortages.append(f'{p.variant} (متاح {p.variant.current_stock}، مطلوب رجوعه {pieces})')
+    if shortages:
+        raise FinishedGoodsPostingError(
+            'مينفعش تلغي الفاتورة — جزء من الكمية اتباع بالفعل: ' + '، '.join(shortages) + '.')
+
+    orig = invoice.journal_entry
+    rev = JournalEntry.objects.create(
+        date=timezone.now().date(),
+        reference=f'CANCEL-{invoice.invoice_no}',
+        description=f'إلغاء فاتورة شراء منتجات تامة {invoice.invoice_no}',
+        status='POSTED',
+        source_doc_type='FinishedGoodsPurchaseInvoice.Cancel',
+        source_doc_id=invoice.id,
+        created_by=user,
+    )
+    if orig:
+        for line in orig.lines.all():
+            JournalLine.objects.create(
+                entry=rev, account=line.account,
+                debit=line.credit, credit=line.debit,
+                description=f'إلغاء — {line.description}',
+                variant=line.variant, supplier=line.supplier,
+            )
+    rev.recalc_totals()
+
+    for p in lines:
+        pieces = p.pieces_in
+        mv = StockMovement.objects.create(
+            variant=p.variant, date=timezone.now().date(), movement_type='ADJUST_OUT',
+            quantity=pieces, unit_cost=p.variant.average_cost,
+            document_type='FinishedGoodsPurchaseInvoice.Cancel', document_id=invoice.id,
+            notes=f'إلغاء فاتورة شراء {invoice.invoice_no}', created_by=user,
+        )
+        mv.apply_to_variant()
+        p.is_posted = False
+        p.save(update_fields=['is_posted'])
+
+    invoice.is_posted = False
+    invoice.notes = (invoice.notes + '\n' if invoice.notes else '') + f'ملغاة — {rev.reference}'
+    invoice.save(update_fields=['is_posted', 'notes'])
+    return rev
+
+
 # ------------------------------------------------------------------ Stock-take
 class StockTakePostingError(Exception):
     """Business-rule failure surfaced to the user when posting a stock-take."""
