@@ -463,6 +463,17 @@ def create_receipt(customer, amount, account, date=''):
             f'تحت الحساب: {money(rem)} | رصيد العميل بقى {money(c.current_balance)}')
 
 
+def cancel_receipt(receipt_no):
+    from sales.models import Receipt
+    from sales.services import cancel_receipt as svc_cancel_receipt
+    rec = Receipt.objects.get(receipt_no=receipt_no)
+    c = rec.customer
+    with transaction.atomic():
+        svc_cancel_receipt(rec)
+    c.refresh_from_db()
+    return f'اتلغى إيصال ✓ {receipt_no} | رصيد {c.name_ar} بقى {money(c.current_balance)}'
+
+
 def create_supplier_payment(supplier, amount, account, date=''):
     from manufacturing.models import SupplierPayment
     from manufacturing.services import post_supplier_payment
@@ -480,6 +491,17 @@ def create_supplier_payment(supplier, amount, account, date=''):
     s.refresh_from_db()
     return (f'اتعمل سند {pay.payment_no} | {s.name} | {money(amt)} | {acct.name}\n'
             f'رصيد المورد بقى {money(s.current_balance)}')
+
+
+def cancel_supplier_payment(payment_no):
+    from manufacturing.models import SupplierPayment
+    from manufacturing.services import cancel_supplier_payment as svc_cancel_payment
+    pay = SupplierPayment.objects.get(payment_no=payment_no)
+    s = pay.supplier
+    with transaction.atomic():
+        svc_cancel_payment(pay)
+    s.refresh_from_db()
+    return f'اتلغى سند الدفع ✓ {payment_no} | رصيد {s.name} بقى {money(s.current_balance)}'
 
 
 @transaction.atomic
@@ -610,33 +632,33 @@ def create_sub_product(main_product, name, fabric_color='', shorts_color=''):
 
 # ------------------------------------------------- الوصفات والأسعار
 @transaction.atomic
-def set_prices(main_product, prices):
-    """تعديل سعر البيع لمقاسات منتج رئيسي. prices = {"XL": 95, "M": 90}"""
-    from inventory.models import Product
-    from inventory.models import sync_variants_from_recipe
-    p = Product.objects.filter(code__iexact=main_product).first() \
-        or Product.objects.filter(name_ar__icontains=main_product).first()
-    if not p:
-        raise ValueError(f'مفيش منتج رئيسي «{main_product}».')
+def set_item_price(item, prices, unlock=False):
+    """سعر مخصص لمنتج فرعي بعينه — مبيأثرش على المنتج الرئيسي ولا المنتجات
+    الفرعية التانية. بيقفل السعر عن المزامنة التلقائية من الوصفة (unlock=True
+    يرجّعه يتزامن تاني عادي). prices = {"XL": 95, "M": 90}"""
+    it = _item(item)
     rows = []
     for size, price in (prices or {}).items():
-        r = p.size_recipes.filter(size__code=size).first()
-        if not r:
-            rows.append(f'  ⚠️ مقاس {size} مش في الوصفة')
+        v = it.variants.filter(size=size).first()
+        if not v:
+            rows.append(f'  ⚠️ مقاس {size} مش موجود في {it.name_ar}')
             continue
-        old = r.selling_price
-        r.selling_price = Decimal(str(price))
-        r.save(update_fields=['selling_price'])
-        rows.append(f'  {size}: {money(old)} → {money(r.selling_price)}')
-    for it in p.sub_products.all():
-        sync_variants_from_recipe(it)
-    return f'أسعار {p.name_ar}:\n' + '\n'.join(rows)
+        old = v.selling_price
+        v.selling_price = Decimal(str(price))
+        v.price_override = not unlock
+        v.save(update_fields=['selling_price', 'price_override'])
+        state = 'مقفول عن المزامنة' if v.price_override else 'راجع يتزامن من الوصفة'
+        rows.append(f'  {size}: {money(old)} → {money(v.selling_price)} ({state})')
+    return f'سعر {it.name_ar}:\n' + '\n'.join(rows)
 
 
 @transaction.atomic
 def set_recipe_size(main_product, size, fabric_qty=None, shorts_fabric_qty=None,
-                    labor_cost=None, selling_price=None, reorder_level=None):
-    """تعديل وصفة مقاس (قماش/مصنعية/سعر/حد الطلب) — اللي متبعتوش مبيتغيّرش."""
+                    labor_cost=None, reorder_level=None):
+    """تعديل وصفة مقاس (قماش/مصنعية/حد الطلب) — اللي متبعتوش مبيتغيّرش.
+    سعر البيع مش من هنا — البوت مالوش صلاحية يغيّر سعر البيع على مستوى
+    المنتج الرئيسي (بيأثر على كل المنتجات الفرعية تحته). لسعر منتج فرعي
+    بعينه استخدم set_item_price."""
     from inventory.models import Product
     from inventory.models import sync_variants_from_recipe
     p = Product.objects.filter(code__iexact=main_product).first() \
@@ -649,7 +671,7 @@ def set_recipe_size(main_product, size, fabric_qty=None, shorts_fabric_qty=None,
     changed = []
     for field, val in (('fabric_qty_kg', fabric_qty),
                        ('shorts_fabric_qty_kg', shorts_fabric_qty),
-                       ('labor_cost', labor_cost), ('selling_price', selling_price),
+                       ('labor_cost', labor_cost),
                        ('reorder_level', reorder_level)):
         if val is not None:
             old = getattr(r, field)
@@ -796,6 +818,15 @@ def cancel_fabric_purchase(invoice_no):
     with transaction.atomic():
         cancel_fabric_purchase_invoice(inv)
     return f'اتلغت فاتورة شراء القماش {invoice_no} — رجّع المخزون وعكس القيد.'
+
+
+def cancel_finished_goods_purchase(invoice_no):
+    from inventory.models import FinishedGoodsPurchaseInvoice
+    from inventory.services import cancel_finished_goods_purchase_invoice
+    inv = FinishedGoodsPurchaseInvoice.objects.get(invoice_no=invoice_no)
+    with transaction.atomic():
+        cancel_finished_goods_purchase_invoice(inv)
+    return f'اتلغت فاتورة شراء المنتج التام {invoice_no} — رجّع المخزون وعكس القيد.'
 
 
 def list_purchases(kind='fabric', limit=15):
@@ -954,9 +985,13 @@ TOOLS = [
        'account = بنك فيصل أو الصندوق.',
        {'customer': _STR, 'amount': _NUM, 'account': _STR, 'date': _STR,
         'confirm': _BOOL}, ['customer', 'amount', 'account']),
+    _t('cancel_receipt', 'إلغاء إيصال قبض مرحّل (يرجّع رصيد العميل ويعكس القيد).',
+       {'receipt_no': _STR, 'confirm': _BOOL}, ['receipt_no']),
     _t('create_supplier_payment', 'سند صرف لمورد.',
        {'supplier': _STR, 'amount': _NUM, 'account': _STR, 'date': _STR,
         'confirm': _BOOL}, ['supplier', 'amount', 'account']),
+    _t('cancel_supplier_payment', 'إلغاء سند دفع لمورد مرحّل (يرجّع رصيد المورد ويعكس القيد).',
+       {'payment_no': _STR, 'confirm': _BOOL}, ['payment_no']),
 
     _t('create_production_order', 'أمر إنتاج جديد (خطة) + تحميل الوصفة. '
        'sizes = {"XL": 12, "S": 6}',
@@ -985,14 +1020,16 @@ TOOLS = [
         'shorts_color': _STR, 'confirm': _BOOL}, ['main_product', 'name']),
 
     # --- الوصفات والأسعار ---
-    _t('set_prices', 'تعديل أسعار البيع لمقاسات منتج رئيسي. '
-       'prices = {"XL": 95, "M": 90} — بيتطبّق على كل المنتجات الفرعية.',
-       {'main_product': _STR, 'prices': {'type': 'object'}, 'confirm': _BOOL},
-       ['main_product', 'prices']),
+    _t('set_item_price', 'سعر مخصص لمنتج فرعي بعينه بس (مبيأثرش على المنتج '
+       'الرئيسي ولا باقي المنتجات الفرعية) — بيقفله عن المزامنة التلقائية. '
+       'prices = {"XL": 95, "M": 90}. unlock=true يرجّعه يتزامن عادي.',
+       {'item': _STR, 'prices': {'type': 'object'}, 'unlock': _BOOL, 'confirm': _BOOL},
+       ['item', 'prices']),
     _t('set_recipe_size', 'تعديل وصفة مقاس: كمية القماش/قماش الشورت/المصنعية/'
-       'سعر البيع/حد إعادة الطلب. اللي متبعتوش مبيتغيّرش.',
+       'حد إعادة الطلب. اللي متبعتوش مبيتغيّرش. (سعر البيع مش من هنا — '
+       'استخدم set_item_price لسعر منتج فرعي بعينه.)',
        {'main_product': _STR, 'size': _STR, 'fabric_qty': _NUM,
-        'shorts_fabric_qty': _NUM, 'labor_cost': _NUM, 'selling_price': _NUM,
+        'shorts_fabric_qty': _NUM, 'labor_cost': _NUM,
         'reorder_level': _NUM, 'confirm': _BOOL}, ['main_product', 'size']),
     _t('set_recipe_accessory', 'تحديد كمية إكسسوار في وصفة مقاس (0 = يشيله).',
        {'main_product': _STR, 'size': _STR, 'accessory': _STR,
@@ -1018,6 +1055,9 @@ TOOLS = [
        ['supplier', 'lines']),
     _t('cancel_fabric_purchase', 'إلغاء فاتورة شراء قماش مرحّلة (يرجّع المخزون '
        'ويعكس القيد). مينفعش لو القماش اتصرف في الإنتاج.',
+       {'invoice_no': _STR, 'confirm': _BOOL}, ['invoice_no']),
+    _t('cancel_finished_goods_purchase', 'إلغاء فاتورة شراء منتجات تامة مرحّلة '
+       '(يرجّع المخزون ويعكس القيد). مينفعش لو جزء من الكمية اتباع.',
        {'invoice_no': _STR, 'confirm': _BOOL}, ['invoice_no']),
     _t('purchase_details', 'بنود فاتورة شراء وحالتها (FPI-… قماش / FGP-… منتجات تامة / إكسسوارات).',
        {'invoice_no': _STR}, ['invoice_no']),
@@ -1052,7 +1092,9 @@ HANDLERS = {
     'post_invoice': post_invoice,
     'cancel_invoice': cancel_invoice,
     'create_receipt': create_receipt,
+    'cancel_receipt': cancel_receipt,
     'create_supplier_payment': create_supplier_payment,
+    'cancel_supplier_payment': cancel_supplier_payment,
     'create_production_order': create_production_order,
     'produce_order': produce_order,
     'link_order_to_invoice': link_order_to_invoice,
@@ -1060,13 +1102,14 @@ HANDLERS = {
     'create_customer': create_customer,
     'create_supplier': create_supplier,
     'create_sub_product': create_sub_product,
-    'set_prices': set_prices,
+    'set_item_price': set_item_price,
     'set_recipe_size': set_recipe_size,
     'set_recipe_accessory': set_recipe_accessory,
     'buy_fabric': buy_fabric,
     'buy_accessories': buy_accessories,
     'buy_finished_goods': buy_finished_goods,
     'cancel_fabric_purchase': cancel_fabric_purchase,
+    'cancel_finished_goods_purchase': cancel_finished_goods_purchase,
     'purchase_details': purchase_details,
     'list_purchases': list_purchases,
     'delete_draft': delete_draft,
@@ -1108,9 +1151,13 @@ def summarize(tool, args):
     if tool == 'create_receipt':
         return (f'💰 إيصال قبض\nالعميل: {a.get("customer")}\n'
                 f'المبلغ: {money(a.get("amount"))}\nالحساب: {a.get("account")}')
+    if tool == 'cancel_receipt':
+        return f'⚠️ إلغاء إيصال قبض {a.get("receipt_no")} (هيرجّع رصيد العميل ويعكس القيد)'
     if tool == 'create_supplier_payment':
         return (f'💸 سند صرف لمورد\nالمورد: {a.get("supplier")}\n'
                 f'المبلغ: {money(a.get("amount"))}\nالحساب: {a.get("account")}')
+    if tool == 'cancel_supplier_payment':
+        return f'⚠️ إلغاء سند دفع {a.get("payment_no")} (هيرجّع رصيد المورد ويعكس القيد)'
     if tool == 'create_production_order':
         return (f'أمر إنتاج: {a.get("item")}\nالمقاسات: {a.get("sizes")}'
                 + (f'\nالعميل: {a.get("customer")}' if a.get('customer') else ''))
@@ -1131,8 +1178,8 @@ def summarize(tool, args):
         return (f'منتج فرعي جديد: {a.get("name")}\nتحت: {a.get("main_product")}'
                 + (f'\nلون القماش: {a.get("fabric_color")}'
                    if a.get('fabric_color') else ''))
-    if tool == 'set_prices':
-        return f'⚠️ تعديل أسعار {a.get("main_product")}\n{a.get("prices")}'
+    if tool == 'set_item_price':
+        return f'⚠️ سعر مخصص لـ {a.get("item")} (مقفول عن المزامنة)\n{a.get("prices")}'
     if tool == 'set_recipe_size':
         vals = {k: v for k, v in a.items()
                 if k not in ('main_product', 'size') and v is not None}
@@ -1149,6 +1196,8 @@ def summarize(tool, args):
                 + (f' — {a.get("account")}' if a.get('account') else ''))
     if tool == 'cancel_fabric_purchase':
         return f'⚠️ إلغاء فاتورة شراء قماش {a.get("invoice_no")}'
+    if tool == 'cancel_finished_goods_purchase':
+        return f'⚠️ إلغاء فاتورة شراء منتج تام {a.get("invoice_no")} (هيرجّع المخزون ويعكس القيد)'
     if tool == 'delete_draft':
         return f'🗑️ حذف المسودة {a.get("doc_no")} — الحذف نهائي'
     return f'{tool}: {a}'
