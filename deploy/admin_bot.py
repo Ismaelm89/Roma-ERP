@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import git_sync
 import tg_voice
 
 REPO = os.environ.get('ROMA_REPO', '/opt/roma-erp')
@@ -99,11 +100,24 @@ ADMIN_TOOLS = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit',
 RESUME_FAILED = 'No conversation found with session ID'
 TIMED_OUT = 'المهمة خدت وقت طويل جداً ووقفت. جرّب تقسّمها لخطوات أصغر.'
 
+SYSTEM = """إنت شغّال على سيرفر «روما للملابس» الحقيقي (/opt/roma-erp) من تليجرام.
+
+- اتكلم **مصري عامي** ومختصر. الأرقام بصيغة 5,500.00.
+- أي تعديل في الكود بيتعمله commit ويترفع على GitHub **تلقائياً** بعد ما
+  ترد — متعملش commit ولا push بنفسك إلا لو عايز تقسّم الشغل لأكتر من
+  commit أو تكتب رسالة أوضح.
+- **التعديل مبيبقاش شغّال على الموقع لوحده**: الكود مبيّت جوّه صورة
+  الكونتينر، فلازم `docker compose up -d --build web` بعد أي تعديل في
+  الكود عشان ينزل فعلاً. قول للمستخدم عملته ولا لأ.
+- متعدّلش ولا ترفع ملف .env ولا أي مفاتيح — دي بره git بالكامل.
+- ردّك بيتبعت على تليجرام: نص عادي مختصر، من غير جداول ماركداون."""
+
 
 def _invoke(prompt, session_id):
     """نداء واحد لـ claude. بيرجّع None لو المهلة خلصت."""
     cmd = ['claude', '-p', prompt, '--output-format', 'json',
            '--permission-mode', 'dontAsk',
+           '--append-system-prompt', SYSTEM,
            '--allowedTools', *ADMIN_TOOLS]
     if session_id:
         cmd += ['--resume', session_id]
@@ -199,6 +213,15 @@ def main():
                     # بنوريه اللي سمعناه عشان لو الكلام اتفهم غلط يصحّحه
                     send(token, chat, f'🎤 سمعت: {text}')
                 reply, sid = run_claude(text)
+                # أي تعديل سابه على الكود → commit + push عشان السيرفر و git
+                # ميفترقوش تاني. بيرجّع None لو مفيش تعديل.
+                try:
+                    note = git_sync.autocommit(text)
+                except Exception as e:
+                    note = f'⚠️ الـ commit التلقائي فشل: {e}'
+                if note:
+                    print(f'  git: {note}', file=sys.stderr)
+                    reply = f'{reply}\n\n{note}'
             finally:
                 stop.set()
             if sid:
