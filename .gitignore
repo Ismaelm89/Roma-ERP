@@ -67,3 +67,15 @@ _workflows/
 
 # --- Data migration dumps (contain password hashes) ---
 data_dump*.json
+
+# --- Bot runtime state (session ids, per-chat) ---
+deploy/.admin_bot_session
+deploy/.ops_sessions/
+deploy/.whisper-models/
+deploy/.venv-stt/
+
+# --- Per-environment compose overrides (server-specific) ---
+docker-compose.override.yml
+
+# --- Editor backups ---
+*.bak
