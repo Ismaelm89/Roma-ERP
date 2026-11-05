@@ -32,6 +32,7 @@ class Product(models.Model):
     WHOLESALE_UNIT_CHOICES = [
         ('DOZEN', 'دستة'),
         ('CARTON', 'كرتونة'),
+        ('THREE', 'ثري'),
     ]
     code = models.CharField('كود المنتج', max_length=20, unique=True, blank=True,
                             help_text='سيب الخانة فاضية وهيتولّد تلقائياً (PRD-0001, PRD-0002 ...)')
@@ -186,7 +187,7 @@ def sync_variants_from_recipe(item):
                                        reorder_level=reorder)
             continue
         changed = []
-        if price and variant.selling_price != price:
+        if price and not variant.price_override and variant.selling_price != price:
             variant.selling_price = price
             changed.append('selling_price')
         if variant.reorder_level != reorder:
@@ -216,6 +217,9 @@ class ItemVariant(models.Model):
                                          default=Decimal('0'),
                                          help_text='لما رصيد القطع ينزل عن العدد ده، '
                                                    'يبقى وقت تطلب/تنتج تاني.')
+    price_override = models.BooleanField('سعر مخصص (مقفول عن المزامنة)', default=False,
+                                          help_text='لو مفعّل، سعر البيع هنا مبيتغيّرش تلقائي '
+                                                    'لما سعر المقاس يتغيّر في وصفة المنتج الرئيسي.')
     # Numeric rank for size ordering — auto-set in save() from size_sort_key().
     # Numbers first (10, 12, 14...), then letters (S, M, L, XL...). Never edited directly.
     size_order = models.PositiveSmallIntegerField(default=999, editable=False)

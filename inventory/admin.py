@@ -50,7 +50,7 @@ class ItemVariantInline(admin.TabularInline):
     form = ItemVariantForm
     extra = 0
     # full read-only set (manufactured item) vs editable set (finished/trading item)
-    _ALL = ('size', 'sku_code', 'selling_price', 'dozen_price_col',
+    _ALL = ('size', 'sku_code', 'selling_price', 'price_override', 'dozen_price_col',
             'current_stock', 'average_cost', 'barcode', 'reorder_level')
     _COMPUTED = ('sku_code', 'dozen_price_col', 'current_stock', 'average_cost')
     fields = _ALL
@@ -72,7 +72,9 @@ class ItemVariantInline(admin.TabularInline):
         return self._is_trading(obj)
 
     def get_readonly_fields(self, request, obj=None):
-        return self._COMPUTED if self._is_trading(obj) else self._ALL
+        # selling_price + price_override قابلين للتعديل دايمًا — لو price_override
+        # متلغّاش، أي تعديل يدوي هنا هيترجع يتزامن من وصفة المنتج الرئيسي تاني.
+        return self._COMPUTED
 
     def dozen_price_col(self, obj):
         if obj and obj.pk and obj.selling_price:
@@ -259,13 +261,14 @@ class ItemAdmin(StayOnPageMixin, admin.ModelAdmin):
 @admin.register(ItemVariant)
 class ItemVariantAdmin(admin.ModelAdmin):
     form = ItemVariantForm
-    list_display = ('sku_code', 'item', 'size', 'selling_price', 'dozen_price_col',
-                    'current_stock', 'average_cost', 'reorder_level')
-    list_filter = ('size',)
+    list_display = ('sku_code', 'item', 'size', 'selling_price', 'price_override',
+                    'dozen_price_col', 'current_stock', 'average_cost', 'reorder_level')
+    list_filter = ('size', 'price_override')
     search_fields = ('sku_code', 'item__code', 'item__name_ar', 'barcode')
     autocomplete_fields = ('item',)
-    # selling_price is owned by the main product's per-size recipe (read-only here).
-    readonly_fields = ('sku_code', 'selling_price', 'current_stock', 'average_cost')
+    # selling_price بييجي عادةً من وصفة المنتج الرئيسي، لكن قابل للتعديل هنا —
+    # فعّل price_override عشان القيمة تفضل ثابتة ومتترجعش تتزامن من الوصفة.
+    readonly_fields = ('sku_code', 'current_stock', 'average_cost')
 
     def dozen_price_col(self, obj):
         if obj.selling_price:
