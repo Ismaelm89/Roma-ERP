@@ -61,15 +61,36 @@
             $price.trigger('change');
         }
 
+        // العميل المختار على الفاتورة — عشان السيرفر يرجّع سعره الخاص لو موجود.
+        function currentCustomerId() {
+            var $c = $('#id_customer');
+            return $c.length ? ($c.val() || '') : '';
+        }
+
+        // علامة صغيرة جنب خانة السعر توضّح إن ده سعر خاص بالعميل.
+        function markSpecial($row, data) {
+            var $price = $row.find('input[name$="-unit_price"]').first();
+            if ($price.length === 0) return;
+            $row.find('.roma-special-price').remove();
+            if (!data.is_special_price) return;
+            $price.after('<span class="roma-special-price" style="color:#15803d;'
+                + 'font-weight:700;font-size:11px;margin-right:4px;white-space:nowrap;" '
+                + 'title="سعر الكتالوج: ' + data.standard_piece_price + '">'
+                + '★ سعر خاص</span>');
+        }
+
         function fetchAndApply(itemId, variantId, $row) {
             var $price = $row.find('input[name$="-unit_price"]').first();
             if ($price.length === 0) return;
             var url = '/sales/item/' + itemId + '/price/';
             if (variantId) url += '?variant=' + variantId;
+            var cust = currentCustomerId();
+            if (cust) url += (variantId ? '&' : '?') + 'customer=' + cust;
             $.getJSON(url)
                 .done(function (data) {
                     console.log('[Roma] price endpoint →', data);
                     if (!data) return;
+                    markSpecial($row, data);
                     // خزّن سعر القطعة + وحدة جملة المنتج على الصف عشان نحسب فوراً عند تغيير الوحدة.
                     $row.data('piecePrice', data.piece_price || data.unit_price);
                     $row.data('wholesaleSize', data.wholesale_unit_size || 0);
@@ -105,6 +126,19 @@
         $(document).on('select2:select', 'select[name$="-item"]', function () { onItemChange(this); });
         $(document).on('change', 'select[name$="-variant"]', function () { onVariantChange(this); });
         $(document).on('select2:select', 'select[name$="-variant"]', function () { onVariantChange(this); });
+
+        // لو المستخدم غيّر العميل → نعيد جلب الأسعار (سعر العميل الخاص يختلف).
+        // الأسعار المكتوبة بالإيد أو المحفوظة قبل كده بتفضل زي ما هي (isUserPriced).
+        function refreshAllRows() {
+            $('select[name$="-variant"]').each(function () {
+                var $row = findRow($(this));
+                var variantId = $(this).val();
+                var itemId = $row.find('select[name$="-item"]').val();
+                if (itemId && variantId) fetchAndApply(itemId, variantId, $row);
+            });
+        }
+        $(document).on('change', '#id_customer', function () { refreshAllRows(); });
+        $(document).on('select2:select', '#id_customer', function () { refreshAllRows(); });
 
         // لما المستخدم يغيّر وحدة البيع (قطعة/دستة/كرتونة) → نعيد حساب السعر على حسب الوحدة.
         $(document).on('change', 'select[name$="-sale_unit"]', function () {

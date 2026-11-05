@@ -13,7 +13,7 @@ from django.views.decorators.cache import never_cache
 from core.account_codes import SYSTEM_ACCOUNTS
 from core.models import Company, JournalLine
 from inventory.models import Item
-from .models import Customer, SalesInvoice
+from .models import Customer, CustomerPrice, SalesInvoice
 
 
 @login_required
@@ -37,10 +37,19 @@ def item_default_price(request, pk):
             v = None
         if v is not None:
             piece = Decimal(v.selling_price or 0).quantize(Decimal('0.01'))
+            source = 'selling_price (piece)'
+            # لو العميل له سعر خاص للمقاس ده (قائمة أسعار العميل) → هو الأولى.
+            special = CustomerPrice.price_for(request.GET.get('customer'), v.pk)
+            if special is not None:
+                piece = Decimal(special).quantize(Decimal('0.01'))
+                source = 'سعر خاص بالعميل'
             p = it.product
             return JsonResponse({
                 'unit_price': str(piece),          # السعر الافتراضي = القطعة
                 'piece_price': str(piece),
+                'is_special_price': special is not None,
+                'standard_piece_price': str(Decimal(v.selling_price or 0)
+                                            .quantize(Decimal('0.01'))),
                 'wholesale_unit': (p.wholesale_unit if p else 'DOZEN'),
                 'wholesale_unit_label': (p.get_wholesale_unit_display() if p else 'دستة'),
                 'wholesale_unit_size': (p.wholesale_unit_size if p else 12),
@@ -48,7 +57,7 @@ def item_default_price(request, pk):
                 'item_name_ar': it.name_ar,
                 'sale_type': 'piece',
                 'size': v.size,
-                'price_source': 'selling_price (piece)',
+                'price_source': source,
             })
 
     # Default — bundle sale: sum of per-piece SKU selling prices across sizes.
