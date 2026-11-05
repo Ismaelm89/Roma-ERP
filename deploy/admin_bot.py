@@ -96,19 +96,41 @@ ADMIN_TOOLS = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit',
                'WebFetch', 'WebSearch', 'Task', 'TodoWrite']
 
 
-def run_claude(prompt):
-    """بينده claude في وضع headless وبيرجّع (النص, session_id)."""
+RESUME_FAILED = 'No conversation found with session ID'
+TIMED_OUT = 'المهمة خدت وقت طويل جداً ووقفت. جرّب تقسّمها لخطوات أصغر.'
+
+
+def _invoke(prompt, session_id):
+    """نداء واحد لـ claude. بيرجّع None لو المهلة خلصت."""
     cmd = ['claude', '-p', prompt, '--output-format', 'json',
            '--permission-mode', 'dontAsk',
            '--allowedTools', *ADMIN_TOOLS]
-    sid = load_session()
-    if sid:
-        cmd += ['--resume', sid]
+    if session_id:
+        cmd += ['--resume', session_id]
     try:
-        p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
-                           timeout=TIMEOUT)
+        return subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                              timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
-        return 'المهمة خدت وقت طويل جداً ووقفت. جرّب تقسّمها لخطوات أصغر.', sid
+        return None
+
+
+def run_claude(prompt):
+    """بينده claude في وضع headless وبيرجّع (النص, session_id)."""
+    sid = load_session()
+    p = _invoke(prompt, sid)
+    if p is None:
+        return TIMED_OUT, sid
+
+    # الجلسة المحفوظة ممكن تختفي (قديمة أو الذاكرة اتنضفت). من غير التعامل مع
+    # ده البوت بيفضل يرد بخطأ على كل رسالة للأبد — فبنمسح الذاكرة ونرد من جديد.
+    if sid and RESUME_FAILED in ((p.stdout or '') + (p.stderr or '')):
+        print(f'session {sid} is gone — starting a fresh one', file=sys.stderr)
+        save_session('')
+        sid = None
+        p = _invoke(prompt, None)
+        if p is None:
+            return TIMED_OUT, None
+
     out = (p.stdout or '').strip()
     if not out:
         return f'مفيش رد. خطأ: {(p.stderr or "")[:1500]}', sid
