@@ -8,7 +8,7 @@ from core.admin_mixins import LockAfterPostMixin, LockedInlineMixin
 from core.templatetags.money_filters import fmt_money
 
 from .models import (
-    Customer, SalesInvoice, SalesInvoiceLine,
+    Customer, CustomerSpecialPrice, SalesInvoice, SalesInvoiceLine,
     Receipt, ReceiptAllocation,
     SalesReturn, SalesReturnLine,
 )
@@ -20,6 +20,20 @@ from .services import (
 )
 
 
+class CustomerSpecialPriceInline(admin.TabularInline):
+    model = CustomerSpecialPrice
+    extra = 1
+    fields = ('product', 'size', 'price', 'discount_pct', 'final_price_col', 'active', 'notes')
+    readonly_fields = ('final_price_col',)
+    autocomplete_fields = ('product',)
+
+    def final_price_col(self, obj):
+        if not obj or not obj.pk:
+            return '—'
+        return fmt_money(obj.final_price)
+    final_price_col.short_description = 'السعر الصافي'
+
+
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
     list_display = ('code', 'name_ar', 'phone', 'governorate', 'payment_terms_days',
@@ -27,6 +41,7 @@ class CustomerAdmin(admin.ModelAdmin):
     list_filter = ('active', 'governorate')
     search_fields = ('code', 'name_ar', 'name_en', 'tax_id', 'phone')
     readonly_fields = ('code',)  # auto-assigned C0001, C0002 ...
+    inlines = [CustomerSpecialPriceInline]
 
     def ledger_link(self, obj):
         url = reverse('sales:customer_ledger', args=[obj.pk])
@@ -39,6 +54,19 @@ class CustomerAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {}; font-variant-numeric: tabular-nums;">{}</span>',
                             color, fmt_money(bal))
     balance_col.short_description = 'الرصيد الحالي'
+
+
+@admin.register(CustomerSpecialPrice)
+class CustomerSpecialPriceAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'product', 'size', 'price', 'discount_pct',
+                     'final_price_col', 'active')
+    list_filter = ('active', 'product')
+    search_fields = ('customer__code', 'customer__name_ar', 'product__code', 'product__name_ar')
+    autocomplete_fields = ('customer', 'product')
+
+    def final_price_col(self, obj):
+        return fmt_money(obj.final_price)
+    final_price_col.short_description = 'السعر الصافي'
 
 
 class SalesInvoiceLineInlineForm(forms.ModelForm):

@@ -13,7 +13,7 @@ from django.views.decorators.cache import never_cache
 from core.account_codes import SYSTEM_ACCOUNTS
 from core.models import Company, JournalLine
 from inventory.models import Item
-from .models import Customer, SalesInvoice
+from .models import Customer, CustomerSpecialPrice, SalesInvoice
 
 
 @login_required
@@ -23,6 +23,8 @@ def item_default_price(request, pk):
     `?variant=<id>`  → returns the per-PIECE price plus the dozen/carton sizes,
                        so the admin JS can compute the price for the chosen unit
                        (piece / dozen / carton).
+    `?customer_id=<id>` (مع variant) → لو عند العميل ده سعر خاص متفق عليه لنفس
+                       المنتج الرئيسي/المقاس، يترجع بدل السعر العام.
     no variant       → BUNDLE sale, returns Σ of per-piece SKU prices.
     """
     from inventory.models import ItemVariant
@@ -30,14 +32,23 @@ def item_default_price(request, pk):
     variants = list(it.variants.all())
 
     variant_id = request.GET.get('variant')
+    customer_id = request.GET.get('customer_id')
     if variant_id:
         try:
             v = ItemVariant.objects.get(pk=int(variant_id), item=it)
         except (ItemVariant.DoesNotExist, ValueError):
             v = None
         if v is not None:
-            piece = Decimal(v.selling_price or 0).quantize(Decimal('0.01'))
             p = it.product
+            piece = Decimal(v.selling_price or 0).quantize(Decimal('0.01'))
+            price_source = 'selling_price (piece)'
+            if customer_id and p:
+                sp = CustomerSpecialPrice.objects.filter(
+                    customer_id=customer_id, product=p, size=v.size, active=True,
+                ).first()
+                if sp:
+                    piece = sp.price  # السعر قبل الخصم — الخصم بيبان لوحده كخصم تاجر
+                    price_source = 'customer_special_price'
             return JsonResponse({
                 'unit_price': str(piece),          # السعر الافتراضي = القطعة
                 'piece_price': str(piece),
@@ -48,7 +59,7 @@ def item_default_price(request, pk):
                 'item_name_ar': it.name_ar,
                 'sale_type': 'piece',
                 'size': v.size,
-                'price_source': 'selling_price (piece)',
+                'price_source': price_source,
             })
 
     # Default — bundle sale: sum of per-piece SKU selling prices across sizes.
@@ -774,7 +785,12 @@ def aging_report(request):
     }
     for c in Customer.objects.all():
         unbilled = Decimal(c.current_balance or 0) - invoiced_due.get(c.id, Decimal('0'))
-        if unbilled <= 0:
+        if unbilled == 0:
+            continue
+        # فرق سالب (خصم/تسوية مش موزّعة على فواتير) بدون فواتير مفتوحة أصلاً — محدش
+        # مديون بحاجة، متعرضش صف فاضي. لو العميل ليه فواتير مفتوحة، لازم نطرح الفرق
+        # عشان الإجمالي يتصالح مع current_balance حتى لو كان سالب.
+        if unbilled < 0 and c not in by_customer:
             continue
         op_date = opening_dates.get(c.id)
         idx = bucket_idx_for((today - op_date).days) if op_date else len(buckets) - 1

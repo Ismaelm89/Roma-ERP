@@ -89,6 +89,38 @@ class Customer(models.Model):
                 - (agg['c'] or Decimal('0')))
 
 
+class CustomerSpecialPrice(models.Model):
+    """سعر خاص متفق عليه مع عميل معين لمنتج رئيسي + مقاس، مع نسبة خصم إضافية
+    تُطبّق فوق السعر ده. بيُستخدم بدل selling_price العادي وقت إنشاء بند فاتورة
+    لنفس العميل/المنتج/المقاس."""
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE,
+                                  related_name='special_prices', verbose_name='العميل')
+    product = models.ForeignKey('inventory.Product', on_delete=models.CASCADE,
+                                 related_name='customer_special_prices',
+                                 verbose_name='المنتج الرئيسي')
+    size = models.CharField('المقاس', max_length=10)
+    price = models.DecimalField('السعر المتفق عليه (قبل الخصم)', max_digits=10, decimal_places=2)
+    discount_pct = models.DecimalField('نسبة خصم إضافية %', max_digits=5, decimal_places=2,
+                                        default=Decimal('0'))
+    active = models.BooleanField('نشط', default=True)
+    notes = models.CharField('ملاحظات', max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'سعر خاص لعميل'
+        verbose_name_plural = 'أسعار خاصة للعملاء'
+        unique_together = ('customer', 'product', 'size')
+
+    def __str__(self):
+        return f'{self.customer} - {self.product} - {self.size}: {self.final_price}'
+
+    @property
+    def final_price(self):
+        """السعر الصافي بعد خصم discount_pct."""
+        return (Decimal(self.price) * (Decimal('1') - Decimal(self.discount_pct or 0) / Decimal('100'))
+                ).quantize(Decimal('0.01'))
+
+
 class SalesInvoice(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'مسودة'),
@@ -317,14 +349,36 @@ class SalesInvoiceLine(models.Model):
             raise ValidationError('حدد «وحدة الجملة» و«عدد القطع فيها» على المنتج الرئيسي الأول '
                                   'عشان تقدر تبيع بالجملة.')
 
+    @property
+    def customer_special_price(self):
+        """اتفاق السعر الخاص بالعميل لهذا المنتج/المقاس، لو موجود (السجل نفسه —
+        السعر قبل الخصم + نسبة الخصم منفصلين، مش السعر الصافي)."""
+        if not (self.invoice_id and self.variant_id):
+            return None
+        p = self._product
+        if not p:
+            return None
+        return CustomerSpecialPrice.objects.filter(
+            customer_id=self.invoice.customer_id, product=p,
+            size=self.variant.size, active=True,
+        ).first()
+
     def save(self, *args, **kwargs):
         # Derive item from the selected variant.
         if self.variant_id and not self.item_id:
             self.item = self.variant.item
-        # Auto-fill unit_price = piece selling price × عدد القطع في الوحدة.
+        # Auto-fill unit_price = piece selling price × عدد القطع في الوحدة —
+        # يستخدم السعر الخاص بالعميل لو متفق عليه (قبل خصمه — الخصم بيبان لوحده
+        # كـ«خصم التاجر» على الفاتورة، مش متبكيت جوه السعر)، وإلا السعر العام للصنف.
+        special = self.customer_special_price if self.variant_id else None
         if (not self.unit_price or Decimal(self.unit_price) == 0) and self.variant_id:
-            piece = Decimal(self.variant.selling_price or 0)
+            piece = special.price if special else Decimal(self.variant.selling_price or 0)
             self.unit_price = (piece * self.unit_factor).quantize(Decimal('0.01'))
+        # لو للعميل خصم متفق عليه وميتحطش خصم تاجر على الفاتورة لسه، طبّقه تلقائي.
+        if special and self.invoice_id and Decimal(self.invoice.doc_discount_percent or 0) == 0 \
+                and Decimal(special.discount_pct or 0) > 0:
+            self.invoice.doc_discount_percent = special.discount_pct
+            self.invoice.save(update_fields=['doc_discount_percent'])
         super().save(*args, **kwargs)
 
     def recalc(self):

@@ -65,7 +65,11 @@
             var $price = $row.find('input[name$="-unit_price"]').first();
             if ($price.length === 0) return;
             var url = '/sales/item/' + itemId + '/price/';
-            if (variantId) url += '?variant=' + variantId;
+            var params = [];
+            if (variantId) params.push('variant=' + variantId);
+            var customerId = $('#id_customer').val();
+            if (customerId) params.push('customer_id=' + customerId);
+            if (params.length) url += '?' + params.join('&');
             $.getJSON(url)
                 .done(function (data) {
                     console.log('[Roma] price endpoint →', data);
@@ -105,6 +109,21 @@
         $(document).on('select2:select', 'select[name$="-item"]', function () { onItemChange(this); });
         $(document).on('change', 'select[name$="-variant"]', function () { onVariantChange(this); });
         $(document).on('select2:select', 'select[name$="-variant"]', function () { onVariantChange(this); });
+
+        // لو المستخدم غيّر العميل بعد ما اختار أصناف — نعيد جلب السعر لكل صف
+        // (عشان لو للعميل ده سعر خاص، يتحدّث تلقائياً).
+        function refetchAllRows() {
+            $('select[name$="-variant"]').each(function () {
+                var variantId = $(this).val();
+                if (!variantId) return;
+                var $row = findRow($(this));
+                var itemId = $row.find('select[name$="-item"]').val();
+                if (!itemId) return;
+                fetchAndApply(itemId, variantId, $row);
+            });
+        }
+        $(document).on('change', '#id_customer', refetchAllRows);
+        $(document).on('select2:select', '#id_customer', refetchAllRows);
 
         // لما المستخدم يغيّر وحدة البيع (قطعة/دستة/كرتونة) → نعيد حساب السعر على حسب الوحدة.
         $(document).on('change', 'select[name$="-sale_unit"]', function () {
